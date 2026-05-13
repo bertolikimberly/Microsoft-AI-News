@@ -411,7 +411,7 @@ def main():
         nlp = spacy.load("en_core_web_sm")
     except OSError:
         import subprocess
-        subprocess.run(["py", "-m", "spacy", "download", "en_core_web_sm"], check=False)
+        subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=False)
         nlp = spacy.load("en_core_web_sm")
     entity_counts, entity_sources = run_ner(articles, nlp)
 
