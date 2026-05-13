@@ -1,9 +1,9 @@
 feedparser==6.0.12
-beautifulsoup4
-nltk
-spacy
-bertopic
-sentence-transformers
-pandas
-scikit-learn
-umap-learn
+beautifulsoup4==4.12.3
+nltk==3.9.1
+spacy==3.8.3
+bertopic==0.16.4
+sentence-transformers==3.3.1
+pandas==2.2.3
+scikit-learn==1.6.1
+umap-learn==0.5.7

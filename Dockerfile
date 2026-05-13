@@ -9,7 +9,11 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY data_engineering/requirements.txt ./data_engineering/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -r data_engineering/requirements.txt
+
+RUN python -m spacy download en_core_web_sm
+RUN python -m nltk.downloader stopwords
 
 EXPOSE 8888
 
