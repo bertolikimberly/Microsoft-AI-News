@@ -99,7 +99,9 @@ def build_stopword_set():
     return set(stopwords.words("english"))
 
 URL_RE = re.compile(r"https?://\S+|www\.\S+")
-PUNCT_NUM_RE = re.compile(r"[^a-z\s]")
+# Preserve numbers, $, %, . and - so figures like "$4.5 billion", "GPT-4o",
+# "Q1 2026" and version strings survive cleaning.
+PUNCT_RE = re.compile(r"[^a-z0-9\s\$\.\-\%]")
 MULTI_SPACE_RE = re.compile(r"\s+")
 
 def clean_text(raw: str, stop_words: set) -> str:
@@ -108,7 +110,7 @@ def clean_text(raw: str, stop_words: set) -> str:
     text = soup.get_text(separator=" ")
     text = text.lower()
     text = URL_RE.sub(" ", text)
-    text = PUNCT_NUM_RE.sub(" ", text)
+    text = PUNCT_RE.sub(" ", text)
     text = MULTI_SPACE_RE.sub(" ", text).strip()
     tokens = [w for w in text.split() if w not in stop_words and len(w) > 2]
     return " ".join(tokens)
@@ -384,7 +386,9 @@ def main():
         nlp = spacy.load("en_core_web_sm")
     except OSError:
         import subprocess
-        subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=False)
+        # Use sys.executable to guarantee the correct Python interpreter is used
+        # regardless of whether 'python' is aliased in the current environment.
+        subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=False)
         nlp = spacy.load("en_core_web_sm")
     entity_counts, entity_sources = run_ner(articles, nlp)
 
