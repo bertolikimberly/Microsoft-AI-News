@@ -1,7 +1,7 @@
 """
 rss_fetcher.py — incremental RSS ingestion with per-source watermarks.
 
-Reads RSS_FEEDS from tag_discovery.py, fetches only entries newer than the
+Reads RSS_FEEDS from sources.py, fetches only entries newer than the
 last successful poll for each source, and persists per-source watermarks
 to fetch_state.json so reruns never re-ingest the same article twice.
 """
