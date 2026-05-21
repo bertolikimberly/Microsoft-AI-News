@@ -32,7 +32,13 @@ DeliveryDay = Literal[
 class PreferencesIn(BaseModel):
     """Body shape for PUT /me/preferences."""
 
+    # Tag selections — one list of tag slugs per taxonomy dimension.
     topics: list[str] = Field(default_factory=list)
+    business_tags: list[str] = Field(default_factory=list)
+    regulation_tags: list[str] = Field(default_factory=list)
+    regions: list[str] = Field(default_factory=list)
+    # Single-choice role tag; null if the user hasn't picked one.
+    role: str | None = None
     muted_sources: list[str] = Field(default_factory=list)
     frequency: Frequency = "weekly"
     delivery_day: DeliveryDay = "monday"
