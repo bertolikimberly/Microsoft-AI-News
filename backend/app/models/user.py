@@ -85,9 +85,11 @@ class Preferences(Base):
     """
     Per-user newsletter preferences. Shape mirrors the JSON in docs/api.md §3.2.
 
-    All fields are scalars — lists (topics, muted_sources) are stored as JSON
-    text so we don't need a separate join table. Fine at MVP scale; revisit
-    if we ever need to query "all users interested in topic X" cheaply.
+    Tag selections are stored per taxonomy dimension — topics, business tags,
+    regulation tags, regions (matching the `Tag` dimensions), plus a single
+    `role`. Each list is stored as JSON text so we don't need a join table.
+    Fine at MVP scale; revisit if we ever need to query "all users interested
+    in tag X" cheaply.
     """
 
     __tablename__ = "preferences"
@@ -98,10 +100,17 @@ class Preferences(Base):
         primary_key=True,
     )
 
-    # Stored as JSON text for now — list[str] in Pydantic, str in DB.
-    # E.g. '["ai_ml", "cloud"]'
+    # Tag selections, one list per taxonomy dimension. Stored as JSON text —
+    # list[str] of tag slugs in Pydantic, str in DB. E.g. '["ai_ml", "cloud"]'.
     topics_json: Mapped[str] = mapped_column(Text, default="[]")
+    business_tags_json: Mapped[str] = mapped_column(Text, default="[]")
+    regulation_tags_json: Mapped[str] = mapped_column(Text, default="[]")
+    regions_json: Mapped[str] = mapped_column(Text, default="[]")
     muted_sources_json: Mapped[str] = mapped_column(Text, default="[]")
+
+    # Single-choice `role` tag (the taxonomy `role` dimension). Nullable —
+    # the user may not have picked one.
+    role: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Plain enums-as-strings. Validation happens in Pydantic schemas.
     frequency: Mapped[str] = mapped_column(String, default="weekly")

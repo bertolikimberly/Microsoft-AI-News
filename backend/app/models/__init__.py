@@ -8,17 +8,17 @@ the tables on the metadata object).
 """
 
 from app.models.chat import ChatSession, ChatTurn
-from app.models.content import Article, ArticleTopic, Source, Topic
+from app.models.content import Article, ArticleTag, Source, Tag
 from app.models.digest import Digest, DigestItem, Feedback
 from app.models.user import Preferences, User
 
 __all__ = [
     "User",
     "Preferences",
-    "Topic",
+    "Tag",
     "Source",
     "Article",
-    "ArticleTopic",
+    "ArticleTag",
     "Digest",
     "DigestItem",
     "Feedback",

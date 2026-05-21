@@ -34,8 +34,9 @@ from app.routers import health as health_router
 from app.routers import internal as internal_router
 from app.routers import me as me_router
 from app.routers import sessions as sessions_router
-from app.routers import topics as topics_router
-from app.seed import seed_topics
+from app.routers import sources as sources_router
+from app.routers import tags as tags_router
+from app.seed import seed_sources, seed_tags
 
 
 @asynccontextmanager
@@ -47,10 +48,12 @@ async def lifespan(app: FastAPI):
     before any prod deploy — auto-create won't catch schema drift.
     """
     Base.metadata.create_all(bind=engine)
-    # Topic taxonomy is required by the prefs UI on day one, so seed it
-    # at every boot. The seed is idempotent — existing rows are untouched.
+    # The tag taxonomy and source registry are required by the prefs UI on
+    # day one, so seed both at every boot. The seeds are idempotent —
+    # existing rows are untouched.
     with SessionLocal() as db:
-        seed_topics(db)
+        seed_tags(db)
+        seed_sources(db)
     yield
     # No shutdown work yet.
 
@@ -130,7 +133,8 @@ API_PREFIX = "/api/v1"
 app.include_router(health_router.router, prefix=API_PREFIX)
 app.include_router(auth_router.router, prefix=API_PREFIX)
 app.include_router(me_router.router, prefix=API_PREFIX)
-app.include_router(topics_router.router, prefix=API_PREFIX)
+app.include_router(tags_router.router, prefix=API_PREFIX)
+app.include_router(sources_router.router, prefix=API_PREFIX)
 app.include_router(articles_router.router, prefix=API_PREFIX)
 app.include_router(digests_router.router, prefix=API_PREFIX)
 app.include_router(sessions_router.router, prefix=API_PREFIX)

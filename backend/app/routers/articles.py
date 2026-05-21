@@ -21,6 +21,10 @@ router = APIRouter(prefix="/articles", tags=["articles"])
 
 def _to_out(article: Article) -> ArticleOut:
     """Flatten the ORM row + relationships into the wire shape."""
+    # Group the multi-dimensional tags by dimension: {dimension: [slug, ...]}.
+    tags_by_dim: dict[str, list[str]] = {}
+    for t in article.tags:
+        tags_by_dim.setdefault(t.dimension, []).append(t.slug)
     return ArticleOut(
         id=article.id,
         title=article.title,
@@ -29,7 +33,8 @@ def _to_out(article: Article) -> ArticleOut:
         published_at=article.published_at,
         author=article.author,
         extract=article.extract,
-        topics=[t.topic_slug for t in article.topics],
+        topics=tags_by_dim.get("topic", []),
+        tags=tags_by_dim,
     )
 
 
