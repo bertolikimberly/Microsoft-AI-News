@@ -6,37 +6,19 @@ Database engine + session factory.
 app/deps.py for the FastAPI dependency that hands them out.
 """
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 
 
-# SQLite needs `check_same_thread=False` because FastAPI may share the
-# connection across threads. Real Postgres doesn't need this flag.
-_engine_kwargs: dict = {}
-if settings.database_url.startswith("sqlite"):
-    _engine_kwargs["connect_args"] = {"check_same_thread": False}
-
-# The engine owns the connection pool. One per process is enough.
+# One engine per process; it owns the connection pool. `pool_pre_ping` cheaply
+# verifies each connection is alive before it leaves the pool, which masks
+# transient drops from Azure Postgres / Neon idle-timeout behaviour.
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,  # checks a connection is alive before handing it out
-    **_engine_kwargs,
+    pool_pre_ping=True,
 )
-
-# SQLite ignores foreign keys unless `PRAGMA foreign_keys=ON` is set on every
-# connection. Without this, the composite FK from `article_tags` into `tags`
-# wouldn't actually reject invalid (dimension, slug) pairs in dev. Postgres
-# enforces foreign keys unconditionally, so this listener is a SQLite-only fix.
-if settings.database_url.startswith("sqlite"):
-
-    @event.listens_for(Engine, "connect")
-    def _sqlite_enable_foreign_keys(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
 
 
 # A session represents a unit of work / a transaction. We don't autoflush

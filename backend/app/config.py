@@ -31,10 +31,24 @@ class Settings(BaseSettings):
     env: str = "dev"
 
     # ─── Database ─────────────────────────────────────────────────────────
-    # SQLAlchemy-style URL. Defaults to a local SQLite file so the app boots
-    # with zero infra. In production we point at Neon (free Postgres + pgvector):
-    #   postgresql+psycopg://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
-    database_url: str = "sqlite:///./dev.db"
+    # SQLAlchemy-style Postgres URL. The default targets the docker-compose
+    # service at the repo root (`docker compose up postgres`). Override in
+    # prod via DATABASE_URL — Azure Postgres Flexible Server, Neon, etc.
+    #
+    # Azure example (note `sslmode=require` and the `azuredb` query param for
+    # managed identity if used):
+    #   postgresql+psycopg://user:pass@host.postgres.database.azure.com:5432/db?sslmode=require
+    #
+    # pgvector must be enabled — on Azure that means adding `vector` to the
+    # azure.extensions server parameter; on local Docker it ships in the
+    # pgvector/pgvector image; on Neon it's pre-enabled.
+    database_url: str = "postgresql+psycopg://mai:mai@localhost:5432/mai_news"
+
+    # Dimensionality of the embeddings stored in `articles.embedding`. Must
+    # match the sentence-transformers model the vector store uses (default
+    # `all-MiniLM-L6-v2` produces 384-dim vectors). Change both together.
+    embedding_dim: int = 384
+    embedding_model: str = "all-MiniLM-L6-v2"
 
     # ─── JWT (our own session token; see docs/auth.md §4) ─────────────────
     # HS256 + a symmetric secret. In production the secret lives in the

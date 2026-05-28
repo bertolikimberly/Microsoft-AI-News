@@ -121,11 +121,10 @@ def _upsert_article(
     """Match on URL; insert if missing. Returns the persisted ArticleORM row."""
     existing = db.query(ArticleORM).filter(ArticleORM.url == pipeline_article.url).first()
     if existing is not None:
-        # Refresh body + embedding pointer if the pipeline has a fresher copy.
+        # Refresh body text if we now have a fresher copy. The embedding
+        # column is populated by the vector store, not by this adapter.
         if pipeline_article.content and not existing.body:
             existing.body = pipeline_article.content
-        if pipeline_article.embedding_id and not existing.embedding_id:
-            existing.embedding_id = pipeline_article.embedding_id
         return existing
 
     source_id = _resolve_source_id(db, pipeline_article.source, fallback_source_id)
@@ -137,7 +136,6 @@ def _upsert_article(
         published_at=_to_aware_utc(pipeline_article.published_at),
         extract=pipeline_article.summary or (pipeline_article.content[:280] if pipeline_article.content else None),
         body=pipeline_article.content,
-        embedding_id=pipeline_article.embedding_id,
     )
     db.add(row)
     db.flush()
