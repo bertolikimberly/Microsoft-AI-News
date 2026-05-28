@@ -41,11 +41,12 @@ class Chatbot:
         """
         history = history or []
 
-        # 1. Retrieve relevant articles
+        # 1. Retrieve relevant articles, optionally constrained to the user's
+        # topic interests so the chat answer doesn't surface off-topic news.
         results = self._store.retrieve(
             query=query,
             top_k=settings.retrieval_top_k,
-            category_filter=user.interests if user.interests else None,
+            topic_filter=user.topic_tags if user.topic_tags else None,
         )
         retrieved_articles = [article for article, _score in results]
 

@@ -2,27 +2,30 @@
 Personalized article ranker.
 
 Scoring formula:
-  score = (semantic_similarity * 0.4)
-        + (category_match * 0.3)
-        + (company_mention * 0.2)
-        + (recency * 0.1)
+  score = (semantic_similarity   * 0.35)
+        + (tag_overlap           * 0.25)
+        + (company_mention       * 0.20)
+        + (recency               * 0.10)
+        + (source_quality        * 0.10)
 
-Weights can be overridden per user via topic_weights in UserProfile,
-which are updated over time based on implicit feedback (clicks, reads).
+`tag_overlap` is the union match across all four content dimensions
+(topic / business / regulation / regional). Weights can be overridden
+per user via UserProfile.topic_weights, updated over time from implicit
+feedback (clicks, reads).
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.models import Article, UserProfile, TechCategory
+from src.models import Article, UserProfile
 
 
 _DEFAULT_WEIGHTS = {
     "semantic": 0.35,
-    "category": 0.25,
+    "tags": 0.25,
     "company": 0.20,
     "recency": 0.10,
-    "source_quality": 0.10,  # primary sources (company blogs, gov) rank higher
+    "source_quality": 0.10,
 }
 
 
@@ -30,15 +33,24 @@ def _recency_score(published_at: datetime) -> float:
     """Score from 0–1. Articles published within 24h score 1.0; decay over 7 days."""
     now = datetime.now(timezone.utc)
     age_hours = (now - published_at.replace(tzinfo=timezone.utc if published_at.tzinfo is None else published_at.tzinfo)).total_seconds() / 3600
-    # Linear decay: 24h = 1.0, 168h (7 days) = 0.0
     return max(0.0, 1.0 - (age_hours / 168.0))
 
 
-def _category_score(article: Article, user: UserProfile) -> float:
-    """1.0 if any article category is in user interests, else 0.0."""
-    user_cats = set(user.interests)
-    article_cats = set(article.categories)
-    return 1.0 if user_cats & article_cats else 0.0
+def _tag_overlap_score(article: Article, user: UserProfile) -> float:
+    """
+    1.0 if any tag overlaps between the user and the article across any of
+    the four content dimensions. Multi-dimensional by design — a user who
+    only cares about a regulation tag still matches an article tagged only
+    in that dimension.
+    """
+    if (
+        (set(article.topic_tags) & set(user.topic_tags))
+        or (set(article.business_tags) & set(user.business_tags))
+        or (set(article.regulation_tags) & set(user.regulation_tags))
+        or (set(article.regions) & set(user.regions))
+    ):
+        return 1.0
+    return 0.0
 
 
 def _company_score(article: Article, user: UserProfile) -> float:
@@ -71,7 +83,7 @@ def score_article(
 
     return (
         w["semantic"] * semantic_similarity
-        + w["category"] * _category_score(article, user)
+        + w["tags"] * _tag_overlap_score(article, user)
         + w["company"] * _company_score(article, user)
         + w["recency"] * _recency_score(article.published_at)
         + w["source_quality"] * _source_quality_score(article)

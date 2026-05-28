@@ -107,7 +107,10 @@ class Article(Base):
         String, ForeignKey("sources.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String, nullable=False)
-    url: Mapped[str] = mapped_column(String, nullable=False)
+    # URL is the natural dedup key. Unique-constrained so concurrent
+    # workers can't both insert the same article — the loser hits an
+    # IntegrityError on commit and falls back to the upsert path.
+    url: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     # ISO author byline — optional, depends on source.
     author: Mapped[str | None] = mapped_column(String, nullable=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
