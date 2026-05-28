@@ -253,13 +253,12 @@
     <tr><td>Length</td><td class="slug">length</td><td>enum</td></tr>
   </tbody>
 </table>
-<blockquote>&#9888; <strong>Known schema gap:</strong> the <code>PUT /me/preferences</code> <em>body</em> documented in feature_endpoints.html accepts <code>role</code>, <code>business_tags</code>, <code>regulation_tags</code>, and <code>regions</code>, but the actual <a href="../backend/app/models/user.py"><code>Preferences</code> ORM model</a> only stores <code>topics</code>, <code>muted_sources</code>, <code>frequency</code>, <code>delivery_day</code>, <code>delivery_hour_local</code>, <code>tone</code>, <code>length</code>, and <code>language</code>. Those four fields must be added to the model before this flow can be persisted.</blockquote>
+<p>Every value submitted is checked against the taxonomy from <code>/tags</code> (see <a href="./feature_endpoints.html">feature_endpoints.html</a> F2) — unknown slugs are rejected.</p>
 
 <hr>
 
 <h2>6. Open items</h2>
 <ul>
-  <li>Add <code>role</code>, <code>business_tags</code>, <code>regulation_tags</code>, <code>regions</code> columns to the <code>Preferences</code> model (§5 gap).</li>
   <li>Confirm the role-driven default values in §4 with the LLM Engineer (tone/length feed prompt templates) and the persona owner.</li>
   <li>Confirm ranking treats an empty Step-2 dimension as a wildcard, not an exclusion (§3 principle).</li>
   <li>Decide whether <code>regional</code> defaults to the user's detected region.</li>
