@@ -25,9 +25,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -83,19 +83,37 @@ def run() -> dict:
 # ----------------------------------------------------------------------
 
 
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+# Window after the last successful generation in which we refuse to
+# generate again for the same user. 22h is enough to swallow per-user TZ
+# jitter (DST transitions, near-midnight runs) without blocking the next
+# scheduled cycle 24h later. Keep this strictly below the shortest
+# delivery cadence (daily = 24h).
+_IDEMPOTENCY_WINDOW = timedelta(hours=22)
+
+
 def _find_eligible_users(db: Session) -> list[User]:
     """
-    Users who should receive a digest today:
-      - have a Preferences row,
-      - aren't soft-deleted,
-      - don't already have a Digest whose generated_at falls on today's UTC date.
+    Per-user, timezone-aware eligibility predicate.
 
-    The full delivery_day / frequency / timezone predicate (docs §F3) lives
-    here too once timezone handling lands; today we treat every user with
-    preferences as eligible and rely on the idempotency check to keep the
-    daily cron from double-sending.
+    A user is eligible right now if, evaluated in their own IANA timezone:
+      1. today's weekday is a delivery day for their `frequency`
+            daily     -> every day
+            weekdays  -> Monday through Friday
+            weekly    -> only on `delivery_day`
+      2. the current local hour has reached `delivery_hour_local`
+      3. they have not received a digest within `_IDEMPOTENCY_WINDOW`
+
+    The worker is expected to run hourly (see digest-cron.yml); the hour
+    check ensures we don't fire before 08:00 local, and the idempotency
+    check ensures we don't fire repeatedly within the same local day.
+
+    Soft-deleted users are excluded. Users with bad/missing timezone strings
+    fall back to UTC rather than being skipped.
     """
-    today = datetime.now(timezone.utc).date()
+    now_utc = datetime.now(timezone.utc)
+    recent_cutoff = now_utc - _IDEMPOTENCY_WINDOW
 
     candidates = (
         db.query(User)
@@ -104,14 +122,56 @@ def _find_eligible_users(db: Session) -> list[User]:
         .all()
     )
 
-    already_done = {
+    recent_user_ids = {
         uid
         for (uid,) in db.query(Digest.user_id)
-        .filter(func.date(Digest.generated_at) == today)
+        .filter(Digest.generated_at >= recent_cutoff)
         .all()
     }
 
-    return [u for u in candidates if u.id not in already_done]
+    eligible: list[User] = []
+    for user in candidates:
+        prefs = user.preferences
+        if prefs is None:
+            continue
+        if user.id in recent_user_ids:
+            continue
+
+        local_now = _to_user_local(now_utc, prefs.timezone)
+
+        if not _is_delivery_day(prefs.frequency, prefs.delivery_day, local_now):
+            continue
+        if local_now.hour < prefs.delivery_hour_local:
+            continue
+
+        eligible.append(user)
+
+    return eligible
+
+
+def _to_user_local(now_utc: datetime, tz_name: str | None) -> datetime:
+    """Convert UTC to the user's local time, falling back to UTC on bad input."""
+    try:
+        zone = ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC")
+    except ZoneInfoNotFoundError:
+        log.warning("digest_worker: unknown timezone %r, falling back to UTC", tz_name)
+        zone = ZoneInfo("UTC")
+    return now_utc.astimezone(zone)
+
+
+def _is_delivery_day(frequency: str, delivery_day: str, local_now: datetime) -> bool:
+    """Today (in user-local TZ) a delivery day for this frequency?"""
+    if frequency == "daily":
+        return True
+    weekday = local_now.weekday()  # Monday = 0
+    if frequency == "weekdays":
+        return weekday < 5
+    if frequency == "weekly":
+        try:
+            return _WEEKDAYS[weekday] == delivery_day
+        except IndexError:
+            return False
+    return False
 
 
 # ----------------------------------------------------------------------
@@ -145,7 +205,9 @@ def _generate_for_user(db: Session, pipeline, user: User) -> None:
 
 def _build_pipeline():
     """
-    Instantiate the LLM pipeline once per worker run.
+    Instantiate the LLM pipeline once per worker run, wired to the backend's
+    pgvector-backed vector store so embeddings and articles share one
+    source of truth (Postgres `articles` table).
 
     Returns None and logs the reason if imports fail or required config
     (LLM API key, etc.) is missing — the webhook then reports
@@ -154,12 +216,14 @@ def _build_pipeline():
     try:
         bootstrap.ensure_pipeline_importable()
         from src.pipeline import NewsPipeline
+        from app.rag.vector_store import ArticleVectorStore
     except ImportError as exc:
         log.warning("digest_worker: pipeline import failed (%s)", exc)
         return None
 
     try:
-        return NewsPipeline()
+        vector_store = ArticleVectorStore(fallback_source_id=_PIPELINE_SOURCE_ID)
+        return NewsPipeline(vector_store=vector_store)
     except Exception:
         log.exception("digest_worker: pipeline construction failed")
         return None
@@ -180,6 +244,3 @@ def _ensure_pipeline_source(db: Session) -> None:
     db.commit()
 
 
-# `date` is imported above to keep the F3 delivery_day predicate close at hand;
-# silence the linter if it's currently unreferenced.
-_ = date

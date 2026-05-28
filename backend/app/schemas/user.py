@@ -13,8 +13,9 @@ how it travels over HTTP. Keeping them separate means:
 
 from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # ─── Preferences ──────────────────────────────────────────────────────────
@@ -46,6 +47,20 @@ class PreferencesIn(BaseModel):
     length: Length = "standard"
     tone: Tone = "technical"
     language: str = Field(default="en", pattern=r"^[a-z]{2}$")
+    # IANA timezone name — drives per-user digest delivery time. The digest
+    # worker interprets `delivery_day` + `delivery_hour_local` in this zone
+    # so every user receives at 08:00 (or whatever hour they pick) in their
+    # own wall clock. Validated against zoneinfo; bad strings 422.
+    timezone: str = "UTC"
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"Unknown IANA timezone: {value!r}") from exc
+        return value
 
 
 class PreferencesOut(PreferencesIn):

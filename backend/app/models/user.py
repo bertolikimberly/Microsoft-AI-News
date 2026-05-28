@@ -120,4 +120,12 @@ class Preferences(Base):
     tone: Mapped[str] = mapped_column(String, default="technical")
     language: Mapped[str] = mapped_column(String, default="en")
 
+    # IANA timezone name (e.g. "America/New_York", "Europe/Madrid"). The
+    # digest worker uses this to interpret `delivery_day` and
+    # `delivery_hour_local` so everyone receives their digest at 08:00 in
+    # their own wall-clock time, not at a single global UTC moment.
+    # Validated against zoneinfo at the schema layer; defaults to UTC so a
+    # user who never sets one still gets a deterministic delivery time.
+    timezone: Mapped[str] = mapped_column(String, default="UTC")
+
     user: Mapped["User"] = relationship(back_populates="preferences")
