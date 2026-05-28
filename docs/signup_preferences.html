@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signup Preferences — Tech Intelligence Newsletter</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --bg: #ffffff;
+    --bg-alt: #f6f8fa;
+    --accent: #0969da;
+    --req: #cf222e;
+    --opt: #1f883d;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  h1, h2, h3 { line-height: 1.25; }
+  h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; color: var(--muted); }
+  blockquote {
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    margin: 1rem 0;
+    padding: .25rem 1rem;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+  a { color: var(--accent); }
+  code {
+    background: var(--bg-alt);
+    padding: .1em .35em;
+    border-radius: 4px;
+    font-size: .9em;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: .92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .55rem .7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  thead th { background: var(--bg-alt); }
+  td.slug {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85rem;
+    white-space: nowrap;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 .55rem;
+    font-size: .75rem;
+    color: var(--muted);
+    margin-left: .35rem;
+    vertical-align: middle;
+  }
+  .badge.req { color: var(--req); border-color: var(--req); }
+  .badge.opt { color: var(--opt); border-color: var(--opt); }
+</style>
+</head>
+<body>
+
+<h1>Signup Preferences — Registration Flow</h1>
+
+<blockquote>
+  Companion to <a href="./personas_and_features.html">personas_and_features.html</a> (§3 — the original preference-controls proposal) and <a href="./feature_endpoints.html">feature_endpoints.html</a> (F1/F2 — the endpoints that read/write these).<br>
+  Defines exactly what a new user selects during registration, in what order, and what each choice maps to.<br>
+  Taxonomy values are owned by <a href="../sources.json">sources.json</a> <code>metadata.tags_taxonomy</code>; slugs are derived from labels by <code>tag_slug()</code> in <a href="../backend/app/seed.py">seed.py</a>.<br><br>
+  Status: <strong>draft proposal</strong> — supersedes the 5-control list in personas_and_features.html §3.
+</blockquote>
+
+<hr>
+
+<h2>1. Flow overview</h2>
+
+<p>Registration is <strong>two steps</strong>:</p>
+
+<table>
+  <thead><tr><th>Step</th><th>Tier</th><th>Selections</th><th>Can skip?</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>Compulsory</strong> <span class="badge req">required</span></td><td>Role · Topics · Sources · Frequency</td><td>No — user cannot finish registration without them</td></tr>
+    <tr><td>2</td><td><strong>Skippable refine</strong> <span class="badge opt">optional</span></td><td>Business · Regulation &amp; Policy · Regional · Tone &amp; Length</td><td>Yes — one <strong>Skip</strong> button; sensible defaults applied</td></tr>
+  </tbody>
+</table>
+
+<p>Design principles:</p>
+<ul>
+  <li><strong>Role is asked first</strong> — it is one tap, and it drives smart defaults for everything after it (see §4).</li>
+  <li><strong>Skip means "no filter", not "match nothing"</strong> — an empty selection in Step 2 is treated as a wildcard (include everything, don't penalise), never as "exclude all".</li>
+  <li><strong>UI labels &ne; taxonomy labels</strong> — the screen shows friendly text; the stored value is always the <code>slug</code>, which links back to the article tags.</li>
+</ul>
+
+<hr>
+
+<h2>2. Step 1 — Compulsory selections <span class="badge req">required</span></h2>
+
+<h3>2.1 Role — single-select, asked first</h3>
+<p>Question: <strong>"Pick the one that best describes you."</strong> Single-select (radio buttons or cards, not chips). Stored as a single value.</p>
+<table>
+  <thead><tr><th>UI label (shown to user)</th><th>Stored <code>slug</code></th><th>Taxonomy label (<code>sources.json</code>)</th></tr></thead>
+  <tbody>
+    <tr><td>Engineer (technical depth)</td><td class="slug">for_engineers_technical_depth</td><td>For engineers (technical depth)</td></tr>
+    <tr><td>Business &amp; Sales</td><td class="slug">for_business_sales</td><td>For business &amp; sales</td></tr>
+    <tr><td>Legal &amp; Compliance</td><td class="slug">for_legal_compliance</td><td>For legal &amp; compliance</td></tr>
+    <tr><td>Executive (strategic)</td><td class="slug">for_executives_strategic</td><td>For executives (strategic)</td></tr>
+    <tr><td>Researcher</td><td class="slug">for_researchers</td><td>For researchers</td></tr>
+  </tbody>
+</table>
+<blockquote>The <code>sources.json</code> labels are written from the <em>article's</em> point of view ("For engineers"); the registration UI re-frames them as first-person identity labels. The <code>slug</code> is unchanged, so it still matches article tags.</blockquote>
+
+<h3>2.2 Topics — multi-select, at least one required</h3>
+<p>Question: <strong>"Which topics do you want to follow?"</strong> Multi-select chips. The user must pick <strong>&ge; 1</strong>.</p>
+<table>
+  <thead><tr><th><code>slug</code></th><th>Label</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">artificial_intelligence_ml</td><td>Artificial Intelligence &amp; ML</td></tr>
+    <tr><td class="slug">cybersecurity</td><td>Cybersecurity</td></tr>
+    <tr><td class="slug">cloud_infrastructure</td><td>Cloud &amp; Infrastructure</td></tr>
+    <tr><td class="slug">software_development</td><td>Software Development</td></tr>
+    <tr><td class="slug">hardware_chips</td><td>Hardware &amp; Chips</td></tr>
+    <tr><td class="slug">data_privacy</td><td>Data &amp; Privacy</td></tr>
+    <tr><td class="slug">quantum_computing</td><td>Quantum Computing</td></tr>
+    <tr><td class="slug">robotics_automation</td><td>Robotics &amp; Automation</td></tr>
+    <tr><td class="slug">fintech_payments</td><td>Fintech &amp; Payments</td></tr>
+    <tr><td class="slug">health_biotech</td><td>Health &amp; Biotech</td></tr>
+    <tr><td class="slug">clean_tech_sustainability</td><td>Clean Tech &amp; Sustainability</td></tr>
+    <tr><td class="slug">space_satellites</td><td>Space &amp; Satellites</td></tr>
+    <tr><td class="slug">metaverse_xr</td><td>Metaverse &amp; XR</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3 Sources — opt-out</h3>
+<p>Question: <strong>"We've picked a default set of sources. Mute any you don't want."</strong> Shown as an opt-out list: every curated source is on by default; the user un-checks (mutes) the ones they don't want. Stored as the list of <em>muted</em> source ids. Source list comes from the <code>/sources</code> endpoint, backed by <code>sources.json</code>.</p>
+
+<h3>2.4 Frequency — single-select</h3>
+<p>Question: <strong>"How often do you want your digest?"</strong> Single-select.</p>
+<table>
+  <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">daily</td><td>One digest every day</td></tr>
+    <tr><td class="slug">weekdays</td><td>One digest Mon–Fri</td></tr>
+    <tr><td class="slug">weekly</td><td>One digest per week (delivery day/time tweakable later in settings)</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>3. Step 2 — Skippable refine selections <span class="badge opt">optional</span></h2>
+
+<p>All of Step 2 can be skipped with one button. If skipped, each dimension is treated as <strong>no filter</strong> (wildcard). The user can set any of these later in the preferences screen.</p>
+
+<h3>3.1 Business — multi-select, skippable</h3>
+<table>
+  <thead><tr><th><code>slug</code></th><th>Label</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">ma_funding</td><td>M&amp;A &amp; Funding</td></tr>
+    <tr><td class="slug">ipo_markets</td><td>IPO &amp; Markets</td></tr>
+    <tr><td class="slug">big_tech_faang_microsoft</td><td>Big Tech (FAANG+Microsoft)</td></tr>
+    <tr><td class="slug">startups_venture</td><td>Startups &amp; Venture</td></tr>
+    <tr><td class="slug">layoffs_hiring</td><td>Layoffs &amp; Hiring</td></tr>
+    <tr><td class="slug">earnings_revenue</td><td>Earnings &amp; Revenue</td></tr>
+  </tbody>
+</table>
+
+<h3>3.2 Regulation &amp; Policy — multi-select, skippable</h3>
+<table>
+  <thead><tr><th><code>slug</code></th><th>Label</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">ai_regulation</td><td>AI Regulation</td></tr>
+    <tr><td class="slug">data_protection_gdpr_dpdp_lgpd</td><td>Data Protection (GDPR, DPDP, LGPD)</td></tr>
+    <tr><td class="slug">antitrust_competition</td><td>Antitrust &amp; Competition</td></tr>
+    <tr><td class="slug">export_controls_sanctions</td><td>Export Controls &amp; Sanctions</td></tr>
+    <tr><td class="slug">digital_infrastructure_policy</td><td>Digital Infrastructure Policy</td></tr>
+    <tr><td class="slug">cybersecurity_policy</td><td>Cybersecurity Policy</td></tr>
+    <tr><td class="slug">platform_regulation</td><td>Platform Regulation</td></tr>
+  </tbody>
+</table>
+
+<h3>3.3 Regional — multi-select, skippable</h3>
+<table>
+  <thead><tr><th><code>slug</code></th><th>Label</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">north_america</td><td>North America</td></tr>
+    <tr><td class="slug">europe</td><td>Europe</td></tr>
+    <tr><td class="slug">greater_china</td><td>Greater China</td></tr>
+    <tr><td class="slug">asia_pacific</td><td>Asia Pacific</td></tr>
+    <tr><td class="slug">india</td><td>India</td></tr>
+    <tr><td class="slug">latin_america</td><td>Latin America</td></tr>
+    <tr><td class="slug">middle_east_africa</td><td>Middle East &amp; Africa</td></tr>
+  </tbody>
+</table>
+<blockquote>Suggestion: default <code>regional</code> to the user's own region rather than showing it blank.</blockquote>
+
+<h3>3.4 Tone &amp; Length — tweak, pre-filled from Role</h3>
+<p>These are not blank questions — they arrive <strong>pre-filled from the Role choice</strong> (see §4). The user only adjusts them if the default is wrong.</p>
+<table>
+  <thead><tr><th>Field</th><th>Options</th></tr></thead>
+  <tbody>
+    <tr><td class="slug">tone</td><td><code>technical</code> · <code>business</code> · <code>executive</code></td></tr>
+    <tr><td class="slug">length</td><td><code>short</code> · <code>standard</code> · <code>deep</code></td></tr>
+  </tbody>
+</table>
+<blockquote>The taxonomy's <code>seniority</code> dimension (<code>Deep dive (IC level)</code> / <code>Brief (exec level)</code>) is <strong>not</strong> a separate question — it maps onto <code>length</code>, which Role already defaults.</blockquote>
+
+<hr>
+
+<h2>4. Role-driven smart defaults</h2>
+<p>Picking a Role pre-fills the rest so Step 2 becomes "confirm or tweak", not "decide from scratch". <strong>Proposed</strong> defaults (tune before locking):</p>
+<table>
+  <thead><tr><th>Role</th><th><code>tone</code></th><th><code>length</code></th><th><code>frequency</code></th><th>Pre-ticked Step-2 chips</th></tr></thead>
+  <tbody>
+    <tr><td>Engineer</td><td><code>technical</code></td><td><code>standard</code></td><td><code>daily</code></td><td>—</td></tr>
+    <tr><td>Business &amp; Sales</td><td><code>business</code></td><td><code>standard</code></td><td><code>weekly</code></td><td>Business: all</td></tr>
+    <tr><td>Legal &amp; Compliance</td><td><code>business</code></td><td><code>standard</code></td><td><code>weekly</code></td><td>Regulation &amp; Policy: all</td></tr>
+    <tr><td>Executive</td><td><code>executive</code></td><td><code>short</code></td><td><code>weekly</code></td><td>—</td></tr>
+    <tr><td>Researcher</td><td><code>technical</code></td><td><code>deep</code></td><td><code>daily</code></td><td>—</td></tr>
+  </tbody>
+</table>
+<p>All pre-ticked values remain fully editable — they are defaults, not locks.</p>
+
+<hr>
+
+<h2>5. Mapping to the preferences API</h2>
+<p>These selections are persisted via <code>PUT /me/preferences</code> (see <a href="./feature_endpoints.html">feature_endpoints.html</a> F2).</p>
+<table>
+  <thead><tr><th>Signup selection</th><th>Preferences field</th><th>Type</th></tr></thead>
+  <tbody>
+    <tr><td>Role</td><td class="slug">role</td><td>single slug</td></tr>
+    <tr><td>Topics</td><td class="slug">topics</td><td>list of slugs</td></tr>
+    <tr><td>Sources (muted)</td><td class="slug">muted_sources</td><td>list of source ids</td></tr>
+    <tr><td>Frequency</td><td class="slug">frequency</td><td>enum</td></tr>
+    <tr><td>Business</td><td class="slug">business_tags</td><td>list of slugs</td></tr>
+    <tr><td>Regulation &amp; Policy</td><td class="slug">regulation_tags</td><td>list of slugs</td></tr>
+    <tr><td>Regional</td><td class="slug">regions</td><td>list of slugs</td></tr>
+    <tr><td>Tone</td><td class="slug">tone</td><td>enum</td></tr>
+    <tr><td>Length</td><td class="slug">length</td><td>enum</td></tr>
+  </tbody>
+</table>
+<p>Every value submitted is checked against the taxonomy from <code>/tags</code> (see <a href="./feature_endpoints.html">feature_endpoints.html</a> F2) — unknown slugs are rejected.</p>
+
+<hr>
+
+<h2>6. Open items</h2>
+<ul>
+  <li>Confirm the role-driven default values in §4 with the LLM Engineer (tone/length feed prompt templates) and the persona owner.</li>
+  <li>Confirm ranking treats an empty Step-2 dimension as a wildcard, not an exclusion (§3 principle).</li>
+  <li>Decide whether <code>regional</code> defaults to the user's detected region.</li>
+  <li>Coordinate with Frontend Dev 1 — this two-step flow supersedes the single-list proposal in personas_and_features.html §3.</li>
+</ul>
+
+</body>
+</html>

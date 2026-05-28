@@ -1,0 +1,91 @@
+# Render Blueprint — one-click deploy for the backend API.
+#
+# To use:
+#   1. Push this repo to GitHub.
+#   2. https://render.com → New → Blueprint → connect the repo.
+#   3. Render reads this file and creates the service.
+#   4. Set the secrets marked `sync: false` in the Render dashboard
+#      (DATABASE_URL, JWT_SECRET, ENTRA_*, OPENAI_API_KEY, RESEND_*).
+#
+# Free plan caveats (matches docs/hosting.md):
+#   - Service sleeps after 15 min idle; first request after sleep is ~30s.
+#   - 512MB RAM, 0.1 CPU.
+#   - 750 hours/month across all free services on your account.
+#
+# Data engineering's root Dockerfile (Jupyter) is unrelated — Render only
+# uses backend/Dockerfile because of `rootDir: backend` below.
+
+services:
+  - type: web
+    name: tech-intel-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon                       # change to frankfurt for EU users (see docs/hosting.md compliance note)
+    healthCheckPath: /api/v1/health/live
+    autoDeploy: true                     # redeploy on push to main
+
+    envVars:
+      # ─── Runtime ─────────────────────────────────────────
+      - key: ENV
+        value: prod
+
+      # ─── Database (Neon) ─────────────────────────────────
+      # Sign up at https://neon.tech, create a project, copy the connection
+      # string. Replace the `postgres://` prefix with `postgresql+psycopg://`.
+      - key: DATABASE_URL
+        sync: false
+
+      # ─── JWT signing secret ──────────────────────────────
+      # Render can generate this for you — no need to set manually.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_ISSUER
+        value: tech-intel-news
+      - key: JWT_AUDIENCE
+        value: tech-intel-news-api
+      - key: JWT_TTL_MINUTES
+        value: "30"
+
+      # ─── Microsoft Entra ID ──────────────────────────────
+      # From the free standalone Entra tenant (entra.microsoft.com).
+      # Update the App Registration's redirect URI to the deployed
+      # callback URL once you know the Render service URL:
+      #   https://tech-intel-api.onrender.com/api/v1/auth/callback
+      - key: ENTRA_TENANT_ID
+        sync: false
+      - key: ENTRA_CLIENT_ID
+        sync: false
+      - key: ENTRA_CLIENT_SECRET
+        sync: false
+      - key: ENTRA_REDIRECT_URI
+        sync: false  # e.g. https://tech-intel-api.onrender.com/api/v1/auth/callback
+
+      # ─── Frontend (Vercel) ───────────────────────────────
+      # Set to the deployed Vercel URL after the frontend is deployed.
+      - key: FRONTEND_URL
+        sync: false  # e.g. https://tech-intel-news.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false  # same value as FRONTEND_URL (comma-separated for multiple)
+
+      # ─── LLM (OpenAI) ────────────────────────────────────
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL_SMALL
+        value: gpt-4o-mini
+      - key: OPENAI_MODEL_LARGE
+        value: gpt-4o
+
+      # ─── Email (Resend) ──────────────────────────────────
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false  # must match a verified sender on Resend
+
+      # ─── Internal worker auth ────────────────────────────
+      # Used by the GitHub Actions cron that triggers the digest worker.
+      - key: WORKER_SHARED_SECRET
+        generateValue: true

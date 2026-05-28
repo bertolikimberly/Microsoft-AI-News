@@ -1,0 +1,38 @@
+# Backend Python dependencies.
+# Pinned to known-good versions for reproducible installs.
+# Update intentionally; run `pip install -r requirements.txt` after pulling.
+
+# Web framework + ASGI server.
+# FastAPI gives us OpenAPI 3.1 for free (matches docs/api.md §1 decision).
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+
+# Settings + data validation.
+# Pydantic v2 is what FastAPI 0.115 expects. The `email` extra installs
+# email-validator, required by `EmailStr` in app/schemas/user.py.
+pydantic[email]==2.9.2
+pydantic-settings==2.6.0
+
+# Database. SQLAlchemy 2.0 (modern syntax with Mapped/mapped_column).
+# psycopg is the modern Postgres driver (replaces psycopg2).
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+
+# JWT mint + validate. crypto extra brings in cryptography for RS256 support
+# (we use HS256 in dev, RS256 in prod per docs/auth.md §4).
+pyjwt[crypto]==2.9.0
+
+# Microsoft Authentication Library — used by app/auth/entra.py
+# to do the OAuth code exchange against Entra ID.
+msal==1.31.0
+
+# HTTP client for talking to Entra ID endpoints (JWKS, etc).
+httpx==0.27.2
+
+# LLM client — OpenAI direct (docs/local_stack.md §6).
+# Used by the digest worker (summarization) and chat service (RAG).
+openai==1.54.4
+
+# Transactional email via Resend (docs/local_stack.md §4 C11).
+# Used by the digest worker to send digests + magic links / verification.
+resend==2.4.0

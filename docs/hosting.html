@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Hosting Plan — Tech Intelligence Newsletter</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      white-space: pre-wrap;
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <style>
+    :root {
+      --fg: #1f2328;
+      --muted: #57606a;
+      --border: #d0d7de;
+      --bg: #ffffff;
+      --bg-alt: #f6f8fa;
+      --accent: #0969da;
+    }
+    html, body { background: var(--bg); color: var(--fg); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.55;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+    h1, h2, h3 { line-height: 1.25; }
+    h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+    h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+    h3 { font-size: 1.05rem; margin-top: 1.4rem; color: var(--muted); }
+    blockquote {
+      border-left: 3px solid var(--border);
+      color: var(--muted);
+      margin: 1rem 0;
+      padding: .25rem 1rem;
+    }
+    hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+    a { color: var(--accent); }
+    code {
+      background: var(--bg-alt);
+      padding: .1em .35em;
+      border-radius: 4px;
+      font-size: .9em;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    pre {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: .88em;
+      line-height: 1.4;
+    }
+    pre code { background: transparent; padding: 0; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: .92em;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: .5rem .7rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--bg-alt); font-weight: 600; }
+    tr:nth-child(even) td { background: #fbfcfd; }
+    ul, ol { padding-left: 1.4rem; }
+    strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Hosting Plan — Tech Intelligence Newsletter</h1>
+</header>
+<h1 id="hosting-plan-free-tier-production-deploy">Hosting Plan —
+Free-Tier Production Deploy</h1>
+<blockquote>
+<p>What we actually deploy for the capstone — laptop-first build,
+free-tier hosted demo. See <a
+href="./personas_and_features.md">personas_and_features.md</a> for the
+product, <a href="./feature_endpoints.md">feature_endpoints.md</a> for
+the API surface.</p>
+<p>Total recurring cost: <strong>$0</strong> + cents-to-low-dollars in
+LLM tokens.</p>
+</blockquote>
+<hr />
+<h2 id="stack-summary">1. Stack Summary</h2>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Provider</th>
+<th>Plan</th>
+<th>Free-tier limit</th>
+<th>Why this one</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Backend API</strong> (<a
+href="../backend/">backend/</a>)</td>
+<td><strong>Render</strong></td>
+<td>Free Web Service</td>
+<td>750 hr/month total · 512 MB RAM · sleeps after 15 min idle · ~30 s
+cold start</td>
+<td>Deploys from Dockerfile, HTTPS free, generous quotas. Blueprint
+config in <a href="../render.yaml">render.yaml</a>.</td>
+</tr>
+<tr>
+<td><strong>Frontend</strong> (<a href="../frontend/">frontend/</a>,
+Next.js)</td>
+<td><strong>Vercel</strong></td>
+<td>Hobby</td>
+<td>100 GB bandwidth/month · unlimited static deploys</td>
+<td>Made by the Next.js team; near-zero config.</td>
+</tr>
+<tr>
+<td><strong>PostgreSQL + pgvector</strong></td>
+<td><strong>Neon</strong></td>
+<td>Free</td>
+<td>0.5 GB storage · 191 compute-hr/month · auto-suspends after
+idle</td>
+<td>Real Postgres, pgvector supported, no card required.</td>
+</tr>
+<tr>
+<td><strong>LLM</strong></td>
+<td><strong>OpenAI API</strong></td>
+<td>PAYG</td>
+<td>No free tier — set a $-cap on the dashboard</td>
+<td>Public pricing → defensible cost-per-user in the report. Dev
+fallback: Ollama local.</td>
+</tr>
+<tr>
+<td><strong>Email</strong></td>
+<td><strong>Resend</strong></td>
+<td>Free</td>
+<td>3 000 emails/month · 100/day</td>
+<td>Clean SDK; sender domain must be verified in the Resend dashboard
+before real delivery works.</td>
+</tr>
+<tr>
+<td><strong>Identity</strong></td>
+<td><strong>Microsoft Entra ID</strong></td>
+<td>Free standalone tenant</td>
+<td>50 000 monthly active users free</td>
+<td>Real OIDC + “Sign in with Microsoft” — no Azure subscription
+required.</td>
+</tr>
+<tr>
+<td><strong>Object storage</strong> (raw HTML)</td>
+<td>Server filesystem at MVP; <strong>Cloudflare R2</strong> later</td>
+<td>R2 free tier</td>
+<td>10 GB storage · no egress fees</td>
+<td>Capstone fits on Render disk; R2 reserved for scale.</td>
+</tr>
+<tr>
+<td><strong>Cache</strong></td>
+<td>In-process Python dict (MVP); <strong>Upstash Redis</strong> if
+needed</td>
+<td>Upstash free</td>
+<td>10 000 commands/day</td>
+<td>Single backend instance — Redis is over-engineering at MVP.</td>
+</tr>
+<tr>
+<td><strong>CI / cron</strong></td>
+<td><strong>GitHub Actions</strong></td>
+<td>Free for public repos</td>
+<td>2 000 min/month private; unlimited public</td>
+<td>Triggers the digest worker via <code>/api/v1/internal/*</code> (see
+<a
+href="../backend/.env.example"><code>WORKER_SHARED_SECRET</code></a>).</td>
+</tr>
+<tr>
+<td><strong>Secrets</strong></td>
+<td><code>.env</code> locally · Render env vars in prod</td>
+<td>—</td>
+<td>—</td>
+<td>No Key Vault needed; Render encrypts env vars at rest.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="the-shape-on-a-diagram">2. The Shape on a Diagram</h2>
+<pre><code>                       USER&#39;S BROWSER
+                              │
+                              ▼
+                Vercel ─── Next.js frontend
+                              │
+                              │ HTTPS / REST + SSE
+                              ▼
+                Render ─── FastAPI backend  ◄── Entra ID (sign-in)
+                              │                ◄── OpenAI API (LLM)
+                              │                ◄── Resend (email)
+                              ▼
+                    Neon (Postgres + pgvector)</code></pre>
+<p>Two hosts (Vercel + Render). Three external API providers (Entra,
+OpenAI, Resend). One managed database (Neon). One repo, one deploy.</p>
+<hr />
+<h2 id="deploy-order-one-time-setup">3. Deploy Order (one-time
+setup)</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>Where</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Create free Entra tenant</td>
+<td>https://entra.microsoft.com</td>
+<td>Steps in <a
+href="../backend/.env.example">backend/.env.example</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Create Neon project, copy connection string</td>
+<td>https://neon.tech</td>
+<td>Replace <code>postgres://</code> →
+<code>postgresql+psycopg://</code>, keep
+<code>?sslmode=require</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Sign up for Resend, generate API key</td>
+<td>https://resend.com</td>
+<td>Verify a sending domain (or use <code>onboarding@resend.dev</code>
+while testing)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Create OpenAI API key + <strong>set a usage cap</strong></td>
+<td>https://platform.openai.com</td>
+<td>Cap matters — accidents can be expensive</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Push the repo to GitHub</td>
+<td>—</td>
+<td>Render reads <code>render.yaml</code> from the default branch</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Render → New → Blueprint → connect repo</td>
+<td>https://render.com</td>
+<td>It reads <a href="../render.yaml">render.yaml</a> and creates the
+service</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Fill in the <code>sync: false</code> env vars in Render
+dashboard</td>
+<td>Render</td>
+<td>DB URL, Entra IDs, OpenAI/Resend keys</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Deploy the frontend</td>
+<td>https://vercel.com</td>
+<td>Connect the repo, set root dir to <code>frontend/</code></td>
+</tr>
+<tr>
+<td>9</td>
+<td>Set <code>FRONTEND_URL</code> + <code>ALLOWED_ORIGINS</code> in
+Render to the Vercel URL</td>
+<td>Render</td>
+<td>Re-deploys automatically</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Update Entra App Registration redirect URI to the deployed
+<code>/auth/callback</code></td>
+<td>Entra portal</td>
+<td><code>https://tech-intel-api.onrender.com/api/v1/auth/callback</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="cost-model">4. Cost Model</h2>
+<p><strong>Recurring infra:</strong> $0/month.</p>
+<p><strong>Variable (LLM tokens):</strong> - Article summary cached
+across users (keyed by <code>article_id</code> + <code>length</code> +
+<code>tone</code>) — ~$0.003 per article on <code>gpt-4o-mini</code>. -
+Chat: ~$0.01–0.05 per conversation on <code>gpt-4o</code>. - Embeddings:
+<strong>$0</strong> — sentence-transformers runs in-process (CPU).</p>
+<p><strong>Demo-scale estimate:</strong> 100 users, weekly digest, 10
+chat conversations/user/month → roughly <strong>$5–15/month</strong> in
+LLM tokens. Easily within an OpenAI hard cap.</p>
+<hr />
+<h2 id="known-trade-offs">5. Known Trade-offs</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Reality</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Render free tier sleeps after 15 min idle</td>
+<td>First request after sleep is ~30 s</td>
+<td>Ping <code>/api/v1/health/live</code> every 10 min from a free cron
+service; or upgrade to Render Starter ($7/mo) for the demo</td>
+</tr>
+<tr>
+<td>Neon auto-suspends idle compute</td>
+<td>Reconnect adds latency</td>
+<td>SQLAlchemy’s <code>pool_pre_ping=True</code> (already on — see <a
+href="../backend/app/db/session.py">backend/app/db/session.py</a>)
+handles it</td>
+</tr>
+<tr>
+<td>OpenAI tokens cost real money</td>
+<td>Capstone-scale demo is cents, but a bug could spike</td>
+<td>Hard $-cap on the OpenAI account + per-route rate limits in the
+API</td>
+</tr>
+<tr>
+<td>Vercel + Render + Neon default to US regions</td>
+<td>Latency for EU users; GDPR data-residency flag for the report</td>
+<td>Render <code>region: frankfurt</code>, Neon EU region, Vercel
+functions in EU — all free; configure if a real EU user is in scope</td>
+</tr>
+<tr>
+<td>No SLA on any free tier</td>
+<td>Service outages possible</td>
+<td>Acceptable for a capstone; mention in the report</td>
+</tr>
+<tr>
+<td>File storage on Render disk is ephemeral</td>
+<td>Container restart loses files</td>
+<td>Move raw-HTML storage to R2 before any real article archive
+matters</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="migration-path-back-to-azure-for-the-report">6. Migration Path
+Back to Azure (for the report)</h2>
+<p>The report can position this deployment as “the free-tier equivalent
+of an Azure-native build.” Every piece swaps at the adapter /
+connection-string layer — application code (FastAPI, SQLAlchemy, the
+OAuth flow) is unchanged.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>This deployment</th>
+<th>Azure equivalent</th>
+<th>Effort to swap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Render</td>
+<td>Azure Container Apps</td>
+<td>new Dockerfile target + connection strings</td>
+</tr>
+<tr>
+<td>Vercel</td>
+<td>Azure Static Web Apps</td>
+<td>rebuild + redeploy</td>
+</tr>
+<tr>
+<td>Neon</td>
+<td>Azure PostgreSQL Flexible Server</td>
+<td>connection string</td>
+</tr>
+<tr>
+<td>Free Entra tenant</td>
+<td>Microsoft corporate Entra tenant</td>
+<td>App Registration in the corporate directory; same OIDC code</td>
+</tr>
+<tr>
+<td>OpenAI direct</td>
+<td>Azure OpenAI Service</td>
+<td>endpoint + auth header (SDK largely compatible)</td>
+</tr>
+<tr>
+<td>Resend</td>
+<td>Azure Communication Services</td>
+<td>swap email-client adapter</td>
+</tr>
+<tr>
+<td>GitHub Actions cron</td>
+<td>Container Apps Job (cron)</td>
+<td>rewrite the workflow as a job spec</td>
+</tr>
+<tr>
+<td><code>.env</code> / Render env vars</td>
+<td>Azure Key Vault</td>
+<td>adapter only</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="whats-already-in-the-code-for-this">7. What’s Already in the
+Code for This</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>File</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../backend/Dockerfile">backend/Dockerfile</a></td>
+<td>Builds the Python 3.12 image Render deploys</td>
+</tr>
+<tr>
+<td><a href="../render.yaml">render.yaml</a></td>
+<td>Blueprint — Render reads this and provisions everything</td>
+</tr>
+<tr>
+<td><a href="../backend/.env.example">backend/.env.example</a></td>
+<td>Full env-var reference with per-service setup steps</td>
+</tr>
+<tr>
+<td><a href="../backend/app/config.py">backend/app/config.py</a></td>
+<td>Typed settings (incl. <code>allowed_origins</code>,
+<code>openai_api_key</code>, <code>resend_api_key</code>)</td>
+</tr>
+<tr>
+<td><a href="../backend/app/main.py">backend/app/main.py</a></td>
+<td>CORS now reads <code>allowed_origins</code> in prod</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="open-questions">8. Open Questions</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Question</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HOST-1</td>
+<td>Region — Oregon (default in render.yaml) or Frankfurt for EU
+latency?</td>
+<td>Backend Dev 1</td>
+</tr>
+<tr>
+<td>HOST-2</td>
+<td>Keep Render free + cold-start pinger, or pay $7/mo for the
+demo?</td>
+<td>Team</td>
+</tr>
+<tr>
+<td>HOST-3</td>
+<td>Custom domain (cosmetic) or stay on <code>*.onrender.com</code> /
+<code>*.vercel.app</code>?</td>
+<td>Backend Dev 1</td>
+</tr>
+<tr>
+<td>HOST-4</td>
+<td>When to switch raw-HTML storage from local disk to Cloudflare
+R2</td>
+<td>Data Engineer 1</td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>
