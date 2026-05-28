@@ -94,8 +94,8 @@ class Source(Base):
 
 class Article(Base):
     """
-    One ingested article. Body text lives in Blob (`body_blob_ref`); we only
-    keep what we need to render citations and digest items.
+    One ingested article. Body text is stored inline in `body`; the vector
+    store keeps the embedding under `embedding_id` for RAG retrieval.
     """
 
     __tablename__ = "articles"
@@ -112,9 +112,13 @@ class Article(Base):
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=_utcnow
     )
-    # Short extract for hover/preview rendering. Full body lives in Blob.
+    # Short extract for hover/preview rendering.
     extract: Mapped[str | None] = mapped_column(Text, nullable=True)
-    body_blob_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Full cleaned article text — used for embedding + LLM summarisation.
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Stable Chroma collection doc id for this article's embedding.
+    # Set after the data pipeline indexes the article into the vector store.
+    embedding_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
     source: Mapped["Source"] = relationship()
     tags: Mapped[list["ArticleTag"]] = relationship(

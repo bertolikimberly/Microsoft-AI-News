@@ -11,71 +11,175 @@ Flow (see docs/feature_endpoints.md F3):
      makes today a delivery day, and who don't already have a digest
      for today (idempotency).
   2. For each eligible user:
-       a. Load preferences (topics, sources, regions, role, tone, length).
-       b. Pull recent articles matching their tag preferences.
-       c. Rank — relevance × recency × tag overlap × source quality.
-       d. Summarise top N with the LLM in their tone + length.
-       e. Resolve citations to source articles.
-       f. Write Digest + DigestItem rows.
-       g. Send (or skip — F8 serves the same content via the API).
+       a. Build a pipeline UserProfile from their backend preferences.
+       b. Run the LLM pipeline end-to-end (fetch → dedupe → rank → generate).
+       c. Persist the resulting NewsletterDigest as Digest + DigestItem
+          + Article rows via the integrations.llm_bridge adapter.
 
-Currently a scaffold: `run()` is wired up so the webhook can call it,
-but the generation steps raise NotImplementedError until the LLM
-provider and ranking algorithm are decided.
+The LLM pipeline lives in the sibling `llm_engineering/` tree; we put it
+on sys.path via integrations.bootstrap so backend code can import from
+`src.*` without packaging it as a wheel.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import date, datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import User
+from app.integrations import bootstrap
+from app.models import Digest, Preferences, Source, User
 
 log = logging.getLogger(__name__)
+
+# Source row used for pipeline-fetched articles when we can't match a
+# specific publisher in the backend `sources` table. Created once on first
+# run.
+_PIPELINE_SOURCE_ID = "src_pipeline"
+_PIPELINE_SOURCE_NAME = "Pipeline (uncategorized)"
 
 
 def run() -> dict:
     """
     Entry point called by the internal webhook.
-    Generate today's digests for all eligible users.
-    Returns a small summary the webhook echoes back.
-    Safe to call repeatedly while the generation steps are stubbed.
+
+    Returns a summary the webhook echoes back. Always returns; per-user
+    failures are logged and counted but don't crash the run.
     """
     with SessionLocal() as db:
+        _ensure_pipeline_source(db)
         eligible = _find_eligible_users(db)
         log.info("digest_worker: eligible users today: %d", len(eligible))
 
+        if not eligible:
+            return {"eligible_users": 0, "generated": 0, "failed": 0}
+
+        pipeline = _build_pipeline()
+        if pipeline is None:
+            log.warning("digest_worker: pipeline unavailable; skipping run")
+            return {"eligible_users": len(eligible), "generated": 0, "failed": 0, "skipped_reason": "pipeline_unavailable"}
+
         generated = 0
+        failed = 0
         for user in eligible:
             try:
-                _generate_for_user(db, user)
+                _generate_for_user(db, pipeline, user)
+                db.commit()
                 generated += 1
-            except NotImplementedError:
-                # Expected while generation is stubbed; log and move on.
-                log.info("digest_worker: generation stubbed for user %s", user.id)
+            except Exception:
+                log.exception("digest_worker: generation failed for user %s", user.id)
+                db.rollback()
+                failed += 1
 
-    return {"eligible_users": len(eligible), "generated": generated}
+        return {"eligible_users": len(eligible), "generated": generated, "failed": failed}
+
+
+# ----------------------------------------------------------------------
+# Eligibility
+# ----------------------------------------------------------------------
 
 
 def _find_eligible_users(db: Session) -> list[User]:
     """
-    Pick users whose preferences make today a delivery day, excluding any
-    who already have a Digest row for today (idempotency lock).
+    Users who should receive a digest today:
+      - have a Preferences row,
+      - aren't soft-deleted,
+      - don't already have a Digest whose generated_at falls on today's UTC date.
 
-    Returns [] today — the scheduling predicate will be implemented when
-    timezone handling and the digest-status field land.
+    The full delivery_day / frequency / timezone predicate (docs §F3) lives
+    here too once timezone handling lands; today we treat every user with
+    preferences as eligible and rely on the idempotency check to keep the
+    daily cron from double-sending.
     """
-    return []
+    today = datetime.now(timezone.utc).date()
 
-
-def _generate_for_user(db: Session, user: User) -> None:
-    """
-    Steps 2a–2g of the flow. Raises NotImplementedError until the LLM
-    provider (Phi-3 / Gemini / etc.) and ranking algorithm are chosen.
-    """
-    raise NotImplementedError(
-        "digest generation pending — pick LLM provider and ranking algorithm; "
-        "see F3 in docs/feature_endpoints.md."
+    candidates = (
+        db.query(User)
+        .join(Preferences, Preferences.user_id == User.id)
+        .filter(User.deleted_at.is_(None))
+        .all()
     )
+
+    already_done = {
+        uid
+        for (uid,) in db.query(Digest.user_id)
+        .filter(func.date(Digest.generated_at) == today)
+        .all()
+    }
+
+    return [u for u in candidates if u.id not in already_done]
+
+
+# ----------------------------------------------------------------------
+# Generation
+# ----------------------------------------------------------------------
+
+
+def _generate_for_user(db: Session, pipeline, user: User) -> None:
+    """
+    Run the pipeline for one user and persist the result.
+
+    Imports from `app.integrations.llm_bridge` are deferred to the call
+    site so a failure to import the pipeline (e.g. missing dependency)
+    doesn't break the rest of the backend on app boot.
+    """
+    from app.integrations.llm_bridge import persist_digest, user_to_profile
+
+    if user.preferences is None:
+        log.info("digest_worker: user %s has no preferences; skipping", user.id)
+        return
+
+    profile = user_to_profile(user, user.preferences)
+    newsletter = asyncio.run(pipeline.run_for_user(profile))
+    persist_digest(db, user, newsletter, fallback_source_id=_PIPELINE_SOURCE_ID)
+
+
+# ----------------------------------------------------------------------
+# Pipeline lifecycle
+# ----------------------------------------------------------------------
+
+
+def _build_pipeline():
+    """
+    Instantiate the LLM pipeline once per worker run.
+
+    Returns None and logs the reason if imports fail or required config
+    (LLM API key, etc.) is missing — the webhook then reports
+    `skipped_reason: pipeline_unavailable` instead of 500ing.
+    """
+    try:
+        bootstrap.ensure_pipeline_importable()
+        from src.pipeline import NewsPipeline
+    except ImportError as exc:
+        log.warning("digest_worker: pipeline import failed (%s)", exc)
+        return None
+
+    try:
+        return NewsPipeline()
+    except Exception:
+        log.exception("digest_worker: pipeline construction failed")
+        return None
+
+
+def _ensure_pipeline_source(db: Session) -> None:
+    """Idempotently insert the fallback Source row used when we can't match a publisher."""
+    if db.get(Source, _PIPELINE_SOURCE_ID) is not None:
+        return
+    db.add(
+        Source(
+            id=_PIPELINE_SOURCE_ID,
+            name=_PIPELINE_SOURCE_NAME,
+            license="rss-snippet-only",
+            source_type="aggregator",
+        )
+    )
+    db.commit()
+
+
+# `date` is imported above to keep the F3 delivery_day predicate close at hand;
+# silence the linter if it's currently unreferenced.
+_ = date
