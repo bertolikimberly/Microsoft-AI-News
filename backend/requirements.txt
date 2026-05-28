@@ -36,3 +36,18 @@ openai==1.54.4
 # Transactional email via Resend (docs/local_stack.md §4 C11).
 # Used by the digest worker to send digests + magic links / verification.
 resend==2.4.0
+
+# ──────────────────────────────────────────────────────────────────────────
+# LLM pipeline deps — pulled in transitively when the digest worker imports
+# the sibling `llm_engineering/` package via app.integrations.bootstrap.
+# Versions track llm_engineering/requirements.txt; keep the two in sync.
+# ──────────────────────────────────────────────────────────────────────────
+anthropic>=0.40.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+tavily-python>=0.3.0
+beautifulsoup4>=4.12.0
+feedparser>=6.0.0
+tiktoken>=0.7.0
+tenacity>=8.3.0
+structlog>=24.0.0
