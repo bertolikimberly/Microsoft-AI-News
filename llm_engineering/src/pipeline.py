@@ -75,7 +75,16 @@ class NewsPipeline:
 
     @staticmethod
     def _build_interest_query(user: UserProfile) -> str:
-        parts = [i.value.replace("_", " ") for i in user.interests[:3]]
+        """
+        Compose a free-text retrieval query from the user's preferences.
+        Topic tags get top billing; we sprinkle in business/regulation tags
+        and tracked companies so the embedding picks up adjacent signal.
+        """
+        parts = [s.replace("_", " ") for s in user.topic_tags[:3]]
+        if user.business_tags:
+            parts.append(user.business_tags[0].replace("_", " "))
+        if user.regulation_tags:
+            parts.append(user.regulation_tags[0].replace("_", " "))
         if user.companies_to_track:
             parts += user.companies_to_track[:2]
         return " ".join(parts) + " latest news"

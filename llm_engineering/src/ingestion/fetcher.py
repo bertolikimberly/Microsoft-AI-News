@@ -27,7 +27,7 @@ import httpx
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.models import Article, TechCategory, UserProfile
+from src.models import Article, UserProfile
 from src.ingestion.source_registry import Source, get_sources_for_user, load_sources
 
 _ARXIV_KEYWORDS = {
@@ -146,7 +146,6 @@ def article_from_de_dict(raw: dict) -> Article | None:
     source = get_source_by_id(raw.get("source_id", ""))
     source_name = source.name if source else raw.get("source_id", "unknown")
     source_type = source.source_type if source else "secondary"
-    categories = source.categories if source else [TechCategory.OTHER]
 
     pub_date_raw = raw.get("pub_date", "")
     try:
@@ -161,7 +160,10 @@ def article_from_de_dict(raw: dict) -> Article | None:
         source=source_name,
         published_at=published_at,
         content=raw.get("summary", ""),
-        categories=categories,
+        topic_tags=source.topic_tags if source else [],
+        business_tags=source.business_tags if source else [],
+        regulation_tags=source.regulation_tags if source else [],
+        regions=source.regions if source else [],
         source_type=source_type,
     )
 
@@ -214,7 +216,10 @@ class RSSFetcher:
                 source=source.name,
                 published_at=published_at,
                 content=content,
-                categories=source.categories,
+                topic_tags=source.topic_tags,
+                business_tags=source.business_tags,
+                regulation_tags=source.regulation_tags,
+                regions=source.regions,
                 source_type=source.source_type,
             )
             articles.append(article)
