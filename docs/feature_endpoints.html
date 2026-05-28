@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feature → Endpoint Map — Tech Intelligence Newsletter</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --bg: #ffffff;
+    --bg-alt: #f6f8fa;
+    --accent: #0969da;
+    --get: #1f883d;
+    --post: #0969da;
+    --put: #9a6700;
+    --delete: #cf222e;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  h1, h2, h3 { line-height: 1.25; }
+  h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+  h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; color: var(--muted); }
+  blockquote {
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    margin: 1rem 0;
+    padding: .25rem 1rem;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+  a { color: var(--accent); }
+  code {
+    background: var(--bg-alt);
+    padding: .1em .35em;
+    border-radius: 4px;
+    font-size: .9em;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  pre {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: .85rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    line-height: 1.45;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: .92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .55rem .7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  thead th { background: var(--bg-alt); }
+  td.method {
+    width: 70px;
+    white-space: nowrap;
+    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85rem;
+  }
+  td.path {
+    width: 38%;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .85rem;
+  }
+  .m-get    { color: var(--get); }
+  .m-post   { color: var(--post); }
+  .m-put    { color: var(--put); }
+  .m-delete { color: var(--delete); }
+  .badge {
+    display: inline-block;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 .55rem;
+    font-size: .75rem;
+    color: var(--muted);
+    margin-left: .35rem;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<h1>Feature → Endpoint Map</h1>
+
+<hr>
+
+<h2>F1 — Employee registration</h2>
+<p>User signs in with their Microsoft identity; the backend provisions a <code>User</code> row on first login. Built against any Entra ID tenant — for development this can be a <strong>free standalone tenant</strong> created from <a href="https://entra.microsoft.com">entra.microsoft.com</a> (no Azure subscription, no credit card; see <a href="../backend/.env.example">backend/.env.example</a> for setup steps).</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-get">GET</td><td class="path">/auth/login</td><td>Starts the OAuth 2.0 / OIDC flow. Generates a CSRF <code>state</code> and a PKCE <code>code_verifier</code>, stashes both in HttpOnly cookies (path <code>/api/v1/auth</code>, 10-min TTL), and <code>302</code>-redirects the browser to Entra's <code>/authorize</code>.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/auth/callback</td><td>OAuth redirect target. Verifies <code>state</code> against the cookie (constant-time compare), exchanges the auth <code>code</code> at Entra's <code>/token</code> endpoint via MSAL (which validates the ID token signature against Entra's JWKS), provisions the <code>User</code> row on first login, mints the app's own JWT, and <code>302</code>-redirects to <code>FRONTEND_URL/#access_token=&lt;jwt&gt;</code>. The token rides in the URL fragment so it stays out of server access logs.</td></tr>
+    <tr><td class="method m-post">POST</td><td class="path">/auth/dev-login</td><td>Dev-only shortcut: provisions a deterministic dev user, seeds demo data, returns <code>{ access_token, token_type, expires_in, user }</code> as JSON. Returns <code>404</code> when <code>ENV != dev</code>.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/me</td><td>Returns the authenticated user (id, email, display name). Requires <code>Authorization: Bearer &lt;jwt&gt;</code>. Used by the frontend to confirm "am I logged in?" and gate the registration vs. app shell.</td></tr>
+  </tbody>
+</table>
+<p><strong>Implementation notes</strong></p>
+<ul>
+  <li>The OAuth flow lives in <a href="../backend/app/auth/entra.py">backend/app/auth/entra.py</a> (MSAL <code>ConfidentialClientApplication</code>) and is wired into the router at <a href="../backend/app/routers/auth.py">backend/app/routers/auth.py</a>.</li>
+  <li>The frontend extracts the JWT from the URL fragment on load, stores it (memory or <code>localStorage</code>), removes it from the URL via <code>history.replaceState</code>, then attaches it as <code>Authorization: Bearer &lt;jwt&gt;</code> on every API call.</li>
+  <li>The same <code>User</code> row shape is used regardless of which login path created it — <code>entra_oid</code> is a placeholder UUID for <code>/auth/dev-login</code> users, and the real Entra <code>oid</code> for real users.</li>
+</ul>
+
+<h2>F2 — Preferences UI <span class="badge">topics · tags · sources · frequency · tone · length</span></h2>
+<p>Reads the multi-dimensional tag taxonomy, the source registry, and the user's current preferences; writes new preferences.</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-get">GET</td><td class="path">/tags</td><td>Gives back the <strong>master list of every label the app uses</strong> — the categories users pick in their preferences and that articles get tagged with. The labels are split into six groups (<code>topic</code>, <code>business</code>, <code>regulation_policy</code>, <code>regional</code>, <code>role</code>, <code>seniority</code>), and this endpoint returns all six in one response. <strong>What you get back:</strong> one JSON object — each key is a group name, each group holds a list of labels, and every label has a <code>slug</code> (the short code the app stores, e.g. <code>artificial_intelligence_ml</code>) and a <code>label</code> (the readable name shown to the user, e.g. <code>Artificial Intelligence &amp; ML</code>). Shape: <code>{ "topic": [ {slug, label}, … ], "business": [ … ], … }</code>. <strong>What it's used for:</strong> (1) the sign-up and preferences screens call it to build the lists of options the user ticks — the topic chips, the role choices, the region chips, and so on (each screen just reads the group it needs out of the response); (2) it is the list of <em>allowed</em> values — when a user saves their preferences the server checks every choice against it, and the data team tags articles using the same slugs. The list almost never changes (it is loaded from <a href="../sources.json">sources.json</a> by <a href="../backend/app/seed.py">seed.py</a> when the app starts), so the response is cached for 24 hours.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/sources</td><td>Lists available sources from the registry: <code>id</code>, <code>name</code>, <code>category</code>, <code>source_type</code>, <code>region</code>, <code>content_quality</code>. Powers the source-muting picker in preferences. Optional filters: <code>?region=</code>, <code>?category=</code>. Backed by <a href="../sources.json">sources.json</a>.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/me/preferences</td><td>Returns the caller's current preferences: selected topics, business tags, regulation tags, regions, role, muted sources, frequency, delivery day/hour, tone, length, language.</td></tr>
+    <tr><td class="method m-put">PUT</td><td class="path">/me/preferences</td><td>Replaces the caller's preferences. Validates every tag slug against the taxonomy and every source id against the registry; rejects unknown values.</td></tr>
+  </tbody>
+</table>
+<p>When the frontend renders the preferences screen it calls <strong>both</strong> <code>/tags</code> and <code>GET /me/preferences</code>: <code>/tags</code> draws every chip (all the options that exist), and <code>GET /me/preferences</code> says which of those chips should appear already ticked and what the frequency / tone / length controls should be set to. <code>/tags</code> is the list of choices; <code>GET /me/preferences</code> is the user's current answers; <code>PUT /me/preferences</code> saves new answers.</p>
+
+<h2>F3 — Email digest generation</h2>
+<p>The digest itself is produced by a background worker (not a public endpoint). The API only exposes <strong>reads</strong> of past digests for end users; writes happen via direct DB access from the digest worker (D1).</p>
+<p>The worker is triggered on a schedule by an <strong>internal webhook</strong> that lives under <code>/api/v1/internal/*</code>. The scheduler is <strong>GitHub Actions cron</strong> (<a href="../.github/workflows/digest-cron.yml">.github/workflows/digest-cron.yml</a>) — free, no card needed, fires the webhook once a day.</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-get">GET</td><td class="path">/me/digests</td><td>Lists the caller's past digests, newest first. Cursor-paginated (<code>?cursor=...&amp;limit=...</code>). Returns summary metadata only (id, generated_at, item_count).</td></tr>
+    <tr><td class="method m-post">POST</td><td class="path">/internal/run-digest-worker</td><td><strong>Infrastructure-only.</strong> Triggers one run of the digest worker. Authenticated by <code>Authorization: Bearer &lt;WORKER_SHARED_SECRET&gt;</code> — not a user JWT. Returns 503 when the secret is unconfigured (closed-by-default). Hidden from OpenAPI (<code>include_in_schema=False</code>) so the frontend client doesn't surface it. Called by GitHub Actions cron; idempotent — the worker skips users who already have a digest for today.</td></tr>
+  </tbody>
+</table>
+<blockquote>The worker logic lives in <a href="../backend/app/workers/digest_worker.py">backend/app/workers/digest_worker.py</a>; the webhook entry point is <a href="../backend/app/routers/internal.py">backend/app/routers/internal.py</a>.</blockquote>
+
+<h2>F4 — Chatbot: grounded Q&amp;A with citations</h2>
+<p>Conversational interface for news exploration. Each user message returns an LLM answer with article citations.</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-post">POST</td><td class="path">/me/sessions</td><td>Starts a brand-new conversation — the "New chat" button. Creates an empty chat session owned by the caller and returns its <code>session_id</code>, which the frontend uses in every later message call.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/me/sessions</td><td>Lists all of the caller's existing conversations, cursor-paginated. Powers the sidebar of past chats the user switches between.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/me/sessions/{session_id}</td><td>Opens one specific conversation — returns the session together with its full message history, so clicking a chat in the sidebar loads the whole back-and-forth.</td></tr>
+    <tr><td class="method m-post">POST</td><td class="path">/me/sessions/{session_id}/messages</td><td>Sends a user message; runs retrieval + LLM; returns the assistant reply <strong>with citations</strong> (each citation has <code>article_id</code>, title, source, url). This is the core grounded-answer endpoint.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/me/sessions/{session_id}/messages</td><td>Fetches a conversation's history in <strong>pages</strong> (cursor-paginated, 50 turns at a time) instead of all at once. Same content as <code>GET /me/sessions/{id}</code>, but for very long chats where one big response would be slow — lets the frontend load older messages on demand as the user scrolls up.</td></tr>
+    <tr><td class="method m-delete">DELETE</td><td class="path">/me/sessions/{session_id}</td><td>Removes a conversation entirely — deletes the session and all its messages together (the user clearing a chat from their sidebar). Messages cascade-delete with the session, so nothing is left orphaned.</td></tr>
+  </tbody>
+</table>
+<p>Citations resolve to articles via:</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-get">GET</td><td class="path">/articles/{article_id}</td><td>Returns the article (title, source, url, published_at, extract). The chatbot UI uses this to expand a citation into a preview card.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/articles/{article_id}/source</td><td>Redirects to the <strong>original publisher URL</strong>. Keeps users tied to the source of truth (grounding requirement from the capstone brief).</td></tr>
+  </tbody>
+</table>
+
+<h2>F5 — Preferences edit + unsubscribe</h2>
+<p>Editing prefs uses the same <code>PUT /me/preferences</code> as F2. Unsubscribe = stop receiving digests, which today means deleting the account (the worker filters out users with no row). Logout is separate and doesn't affect delivery.</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-put">PUT</td><td class="path">/me/preferences</td><td>Update preferences (also the path for changing cadence / muting sources).</td></tr>
+    <tr><td class="method m-delete">DELETE</td><td class="path">/me</td><td>Deletes the caller's account and all dependent rows (sessions, feedback, digests). Returns <code>204</code>.</td></tr>
+    <tr><td class="method m-post">POST</td><td class="path">/auth/logout</td><td>Returns <code>204</code>. Bearer-token auth is stateless, so logout is the frontend forgetting its JWT; the server defensively clears any leftover oauth cookies but holds no per-user session. Does <strong>not</strong> unsubscribe — the user keeps receiving digests until they hit <code>DELETE /me</code>.</td></tr>
+  </tbody>
+</table>
+
+<h2>F6 — Feedback signal <span class="badge">thumbs up/down</span> <span class="badge">maybe — to consider implementation</span></h2>
+<p>One signal per <code>(user, digest, article)</code>. A second POST overwrites the previous signal (idempotent).</p>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-post">POST</td><td class="path">/me/digests/{digest_id}/feedback</td><td>Records a thumbs up/down for one article inside one digest. Body: <code>{ article_id, signal: "up" | "down" }</code>. Returns <code>204</code>. Validates that the article actually appeared in the digest so feedback can't be forged against unrelated articles.</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Auxiliary endpoints (not feature-mapped)</h2>
+<table>
+  <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td class="method m-get">GET</td><td class="path">/health/live</td><td>Liveness probe — returns immediately. For container orchestrator.</td></tr>
+    <tr><td class="method m-get">GET</td><td class="path">/health/ready</td><td>Readiness probe — confirms DB is reachable before declaring ready.</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>Endpoint summary (one-liner per route)</h2>
+<pre>
+GET    /api/v1/auth/login                              F1   Start SSO
+GET    /api/v1/auth/callback                           F1   SSO callback — provisions user on first login
+POST   /api/v1/auth/logout                             F5   Clear session cookie
+POST   /api/v1/auth/dev-login                          F1   Dev shortcut (disabled in prod)
+
+GET    /api/v1/me                                      F1   Current user
+DELETE /api/v1/me                                      F5   Delete account
+GET    /api/v1/me/preferences                          F2   Read preferences
+PUT    /api/v1/me/preferences                          F2/F5  Update preferences (topics/tags/sources/freq/tone/length)
+
+GET    /api/v1/tags                                    F2   Full multi-dimensional tag taxonomy (drives all preference chips)
+GET    /api/v1/sources                                 F2   Source registry (id/name/category/region/source_type)
+
+GET    /api/v1/articles/{id}                           F4   Article detail (for citation expansion)
+GET    /api/v1/articles/{id}/source                    F4   Redirect to original publisher URL
+
+GET    /api/v1/me/digests                              F3   List past digests
+POST   /api/v1/me/digests/{id}/feedback                F6   Thumbs up/down on one item
+
+POST   /api/v1/me/sessions                             F4   Create chat session
+GET    /api/v1/me/sessions                             F4   List chat sessions
+GET    /api/v1/me/sessions/{id}                        F4   Get session + history
+DELETE /api/v1/me/sessions/{id}                        F4   Delete session
+GET    /api/v1/me/sessions/{id}/messages               F4   Paginated message history
+POST   /api/v1/me/sessions/{id}/messages               F4   Send message — LLM answer + citations
+
+GET    /api/v1/health/live                             —    Liveness probe
+GET    /api/v1/health/ready                            —    Readiness probe
+
+POST   /api/v1/internal/run-digest-worker              F3   [INFRA] Trigger digest worker (shared-secret auth; GH Actions cron)
+</pre>
+
+</body>
+</html>

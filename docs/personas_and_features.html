@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personas &amp; Features — Tech Intelligence Newsletter</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #57606a;
+    --border: #d0d7de;
+    --bg: #ffffff;
+    --bg-alt: #f6f8fa;
+    --accent: #0969da;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  h1, h2, h3 { line-height: 1.25; }
+  h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+  h2 { font-size: 1.4rem; margin-top: 2.2rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.6rem; }
+  blockquote {
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    margin: 1rem 0;
+    padding: .25rem 1rem;
+  }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
+  a { color: var(--accent); }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: .95rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .5rem .7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  thead th { background: var(--bg-alt); }
+  td:first-child, th:first-child { white-space: nowrap; }
+  code {
+    background: var(--bg-alt);
+    padding: .1em .35em;
+    border-radius: 4px;
+    font-size: .9em;
+  }
+  ul { padding-left: 1.4rem; }
+  li { margin: .2rem 0; }
+  .meta { color: var(--muted); font-style: italic; }
+  .checkbox::before { content: "\2610  "; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>Personas &amp; Features — Tech Intelligence Newsletter</h1>
+
+<blockquote>
+  Phase 1 deliverable, Backend Dev 1 (Product/Architecture Lead).<br>
+  Draft v0.1 — iterate before locking.<br>
+  Anchored on <a href="../Specs.md">Specs.md</a>.
+</blockquote>
+
+<hr>
+
+<h2>1. Target Audience</h2>
+
+<p><strong>MVP audience:</strong> Microsoft employees who need to stay current on tech news (AI, cloud, devtools, competitive intel) but don't have time to read 20 sources a day.</p>
+
+<p><strong>Why personas matter here:</strong> Specs.md leaves "which preferences do we expose at registration?" as an open question. Personas drive that answer — different roles need different controls. They also drive feature priority: the chatbot's "dig deeper" flow is mission-critical for some personas and a nice-to-have for others.</p>
+
+<hr>
+
+<h2>2. Personas</h2>
+
+<p>Four personas, in priority order (P0 = must serve well at MVP; P1 = serve adequately; P2 = post-MVP).</p>
+
+<h3>P0 — "Priya", Senior Software Engineer (Azure / AI Platform)</h3>
+<table>
+  <tr><th>Role</th><td>IC6-ish engineer building infra/AI services</td></tr>
+  <tr><th>Goals</th><td>Track AI model releases, infra trends, competitor moves (AWS/GCP), security advisories</td></tr>
+  <tr><th>Pain points</th><td>Drowning in newsletters; misses important launches; can't tell signal from hype</td></tr>
+  <tr><th>News habits</th><td>Skims 5–10 sources weekly; deep-reads 1–2 articles/day; uses HN, Twitter, vendor blogs</td></tr>
+  <tr><th>Preferences</th><td>Daily digest, technical tone, longer summaries (~5 sentences), citations critical, AI + infra topics</td></tr>
+  <tr><th>Chatbot use</th><td>"What's new in vLLM this week?" / "Compare AWS Bedrock and Azure AI Foundry's pricing." Deep follow-ups.</td></tr>
+  <tr><th>Success metric</th><td>Catches a major release within 24h; can explore a topic without leaving the product</td></tr>
+</table>
+
+<h3>P0 — "Marcus", Product Manager (Copilot / M365)</h3>
+<table>
+  <tr><th>Role</th><td>PM owning a feature area in a Copilot or M365 product</td></tr>
+  <tr><th>Goals</th><td>Competitive intel, customer-facing announcements, market trends, what analysts are saying</td></tr>
+  <tr><th>Pain points</th><td>Needs to brief execs on Mondays; spends Sunday catching up; hard to find non-tech-press analyst takes</td></tr>
+  <tr><th>News habits</th><td>Scans headlines daily; reads analyst pieces; follows competitor product blogs</td></tr>
+  <tr><th>Preferences</th><td>Weekly digest (Mon AM), business/exec tone, mid-length summaries, business-impact framing, competitive topics</td></tr>
+  <tr><th>Chatbot use</th><td>"What did Google announce at I/O that affects Copilot?" / "Summarize this week's analyst coverage of OpenAI."</td></tr>
+  <tr><th>Success metric</th><td>Walks into Monday standup with the week's competitive landscape already mapped</td></tr>
+</table>
+
+<h3>P1 — "Jen", Director of Engineering</h3>
+<table>
+  <tr><th>Role</th><td>M2 / Director overseeing multiple eng teams</td></tr>
+  <tr><th>Goals</th><td>Strategic-level signal only — major shifts, M&amp;A, regulation, hiring market</td></tr>
+  <tr><th>Pain points</th><td>Has zero time; current digests are too long and too technical</td></tr>
+  <tr><th>News habits</th><td>Reads top-of-inbox in 5 minutes; delegates depth to ICs</td></tr>
+  <tr><th>Preferences</th><td>Weekly digest, executive tone, very short summaries (1–2 sentences), strategic + regulatory topics</td></tr>
+  <tr><th>Chatbot use</th><td>Rare — mostly "what should I know about X before this meeting?"</td></tr>
+  <tr><th>Success metric</th><td>One scan in the morning replaces 4 newsletter subscriptions</td></tr>
+</table>
+
+<h3>P2 — "Alex", AI Research Scientist (MSR)</h3>
+<table>
+  <tr><th>Role</th><td>Researcher, technical depth obsessed</td></tr>
+  <tr><th>Goals</th><td>Track papers, model releases, benchmark results</td></tr>
+  <tr><th>Pain points</th><td>News summaries are too shallow; loses citation chain to original paper</td></tr>
+  <tr><th>News habits</th><td>arXiv, Twitter, conf proceedings</td></tr>
+  <tr><th>Preferences</th><td>Daily digest, academic tone, paper citations preserved, AI/ML-only topics</td></tr>
+  <tr><th>Chatbot use</th><td>"Which papers this week cite RWKV?" — citation graph navigation</td></tr>
+  <tr><th>Success metric</th><td>Doesn't need to leave for arXiv to validate a claim</td></tr>
+</table>
+
+<p class="meta">Post-MVP because: paper-grade citation fidelity requires academic-source ingestion (arXiv, ACL Anthology, etc.) which is a separate licensing/parsing track from press-RSS.</p>
+
+<hr>
+
+<h2>3. Features (MVP)</h2>
+
+<p>Mapped to Specs.md MVP requirements. Each row = one feature with persona priority.</p>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Feature</th><th>Specs.md tie</th><th>Priya</th><th>Marcus</th><th>Jen</th><th>MVP?</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>F1</td><td><strong>Employee registration</strong> (Microsoft email + identity check)</td><td>§1 Registration</td><td>✅</td><td>✅</td><td>✅</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F2</td><td><strong>Preferences UI</strong> (topics, sources, frequency, tone, length)</td><td>§1 Personalization</td><td>✅</td><td>✅</td><td>✅</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F3</td><td><strong>Email digest generation</strong> (ranked, deduped, summarized, cited)</td><td>§2 Push</td><td>✅</td><td>✅</td><td>✅</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F4</td><td><strong>Configurable cadence</strong> (daily / weekly; choice of delivery day/time)</td><td>§2 Push</td><td>daily</td><td>weekly</td><td>weekly</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F5</td><td><strong>Chatbot — grounded Q&amp;A with citations</strong></td><td>§3 Pull</td><td>✅</td><td>✅</td><td>✅</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F6</td><td><strong>Chatbot — follow-ups &amp; "dig deeper"</strong></td><td>§3 Pull</td><td>✅ critical</td><td>✅</td><td>nice-to-have</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F7</td><td><strong>Chatbot — story comparison</strong> ("compare X vs Y")</td><td>§3 Pull</td><td>✅</td><td>✅ critical</td><td>—</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F8</td><td><strong>Read the digest in-app</strong> (linked from email; same content rendered as web)</td><td>implied by §2 + §3 sharing infra</td><td>✅</td><td>✅</td><td>—</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F9</td><td><strong>Preferences edit + unsubscribe</strong></td><td>implied by §1</td><td>✅</td><td>✅</td><td>✅</td><td><strong>MVP</strong></td></tr>
+    <tr><td>F10</td><td><strong>Feedback signal</strong> (thumbs up/down per item — feeds ranking)</td><td>implied by §3 eval</td><td>✅</td><td>✅</td><td>—</td><td>MVP-stretch</td></tr>
+    <tr><td>F11</td><td><strong>Language selection</strong></td><td>open question in Specs.md</td><td>—</td><td>—</td><td>—</td><td><strong>post-MVP</strong></td></tr>
+    <tr><td>F12</td><td><strong>Saved articles / read-later</strong></td><td>not in Specs.md</td><td>—</td><td>—</td><td>—</td><td><strong>post-MVP</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>Preference controls exposed at registration (proposal — answers Specs.md open Q)</h3>
+<ol>
+  <li><strong>Topics</strong> — multi-select chip list, ~12 fixed taxonomy (AI/ML, Cloud, Security, DevTools, Data, Hardware, Regulation/Policy, M&amp;A, Open Source, Research, Mobile, Enterprise)</li>
+  <li><strong>Sources</strong> — opt-out only (we curate a default set in Phase 1; user can mute sources later)</li>
+  <li><strong>Frequency</strong> — daily / weekdays / weekly (default: weekly)</li>
+  <li><strong>Length</strong> — short (1–2 sentences) / standard (3–5) / deep (paragraph)</li>
+  <li><strong>Tone</strong> — technical / business / executive</li>
+</ol>
+
+<p class="meta">Deliberately omitting at registration: language (en-only at MVP), delivery time (sensible default; tweak in settings), source allowlist (too much choice up-front).</p>
+
+<hr>
+
+<h2>4. Non-Goals (MVP)</h2>
+<p>To keep scope honest:</p>
+<ul>
+  <li>No native mobile app (mobile-web only — Frontend Dev 1's mobile-first wireframes cover this)</li>
+  <li>No team/group digests — individual users only</li>
+  <li>No content generation beyond summary + chat (no auto-tweet, no Slack bot)</li>
+  <li>No external sharing primitives (Phase 2)</li>
+  <li>No non-English sources</li>
+  <li>No paid-tier sources at MVP (licensing complexity — Specs.md compliance topic)</li>
+</ul>
+
+<hr>
+
+<h2>5. Open Questions Carried Forward</h2>
+<blockquote>These feed the architecture diagram + API design tasks.</blockquote>
+<ul>
+  <li class="checkbox"><strong>Employee verification mechanism</strong> — Entra ID SSO? Email-domain check? Affects auth design.</li>
+  <li class="checkbox"><strong>Per-user data retention</strong> — How long do we keep chat logs? GDPR open Q from Specs.md.</li>
+  <li class="checkbox"><strong>Feedback storage</strong> — Is F10 a ranking input from day 1, or fire-and-forget for eval only?</li>
+  <li class="checkbox"><strong>Chatbot session memory</strong> — Per-conversation only, or persistent user-level context?</li>
+  <li class="checkbox"><strong>Digest vs. chat shared index</strong> — Specs.md §"system architecture" says they should share infra. Confirm one news index serves both retrieval paths.</li>
+</ul>
+
+<hr>
+
+<h2>6. Next Steps (Phase 1 dependencies)</h2>
+<ul>
+  <li><strong>Architecture diagram</strong> (next task) — should reflect the MVP feature set above</li>
+  <li><strong>API structure</strong> — endpoints fall out of F1–F9 directly</li>
+  <li><strong>Auth &amp; user management</strong> — answered by employee-verification decision above</li>
+  <li><strong>Coordinate with Frontend Dev 1</strong> — preference controls in §3 drive registration wireframes</li>
+  <li><strong>Coordinate with LLM Engineer</strong> — tone/length preferences (F2) must map to prompt templates</li>
+  <li><strong>Coordinate with Data Engineer 2</strong> — F10 feedback signal design</li>
+</ul>
+
+</body>
+</html>
