@@ -1,9 +1,10 @@
 """
 Adapter layer between backend ORM types and the LLM pipeline's Pydantic
-types. Two directions:
+types. Three directions:
 
   user_to_profile(user, prefs)              -> pipeline UserProfile (input)
   persist_digest(db, user, newsletter)      -> Digest + DigestItems + Articles + ArticleTags (output)
+  chat_reply(user, prefs, query, history)   -> (answer, citations, token_usage) for SSE streaming (L2)
 
 The pipeline now speaks the backend's multi-dimensional tag vocabulary
 directly (topic / business / regulation / regional slugs), so this
@@ -194,3 +195,82 @@ def _to_aware_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+# ----------------------------------------------------------------------
+# Chat (L2 — used by /me/sessions/{id}/messages SSE handler)
+# ----------------------------------------------------------------------
+
+
+def chat_reply(
+    db: Session,
+    user: UserORM,
+    prefs: PreferencesORM,
+    query: str,
+    history: list[tuple[str, str]],
+) -> tuple[str, list[dict], int, int]:
+    """
+    Run the chatbot against the user's question and return:
+
+        (answer_text, citations, prompt_tokens, completion_tokens)
+
+    `history` is a list of (role, content) tuples already trimmed by the
+    caller — the chatbot trims again internally but we keep it short to
+    bound prompt size.
+
+    `citations` is a list of plain dicts the SSE handler can serialize:
+        [{"index": 1, "article_id": "...", "title": "...", "source": "...",
+          "url": "...", "published_at": "ISO-Z"}, ...]
+    Citation `article_id` is matched against the backend's `articles` table
+    by URL — articles the pipeline returns that we've never seen are
+    skipped from citations (they'd have no stable id for the frontend
+    to deep-link).
+
+    Raises RuntimeError on import / construction failure so the caller can
+    fall back to a stub stream instead of streaming nothing.
+    """
+    # Deferred import: don't pay the bootstrap cost on every backend boot.
+    from app.integrations import bootstrap
+
+    try:
+        bootstrap.ensure_pipeline_importable()
+        from src.llm.chatbot import Chatbot
+        from src.models import ChatMessage
+        from app.rag.vector_store import ArticleVectorStore
+    except ImportError as exc:
+        raise RuntimeError(f"chat pipeline unavailable: {exc}") from exc
+
+    chatbot = Chatbot(vector_store=ArticleVectorStore())
+
+    profile = user_to_profile(user, prefs)
+    chat_history = [ChatMessage(role=r, content=c) for r, c in history]
+
+    response = chatbot.chat(query=query, user=profile, history=chat_history)
+
+    # Map pipeline source articles back to our ArticleORM rows by URL so
+    # citations carry our internal `article_id`s (frontend deep-link target).
+    citations: list[dict] = []
+    if response.sources:
+        urls = [a.url for a in response.sources if a.url]
+        by_url = {
+            row.url: row
+            for row in db.query(ArticleORM).filter(ArticleORM.url.in_(urls)).all()
+        }
+        for idx, src in enumerate(response.sources, start=1):
+            row = by_url.get(src.url)
+            if row is None:
+                continue
+            citations.append(
+                {
+                    "index": idx,
+                    "article_id": row.id,
+                    "title": row.title,
+                    "source": row.source.name if row.source else "",
+                    "url": row.url,
+                    "published_at": row.published_at.isoformat() if row.published_at else None,
+                }
+            )
+
+    prompt_tokens = getattr(response.token_cost, "input_tokens", 0) or 0
+    completion_tokens = getattr(response.token_cost, "output_tokens", 0) or 0
+    return response.answer, citations, prompt_tokens, completion_tokens

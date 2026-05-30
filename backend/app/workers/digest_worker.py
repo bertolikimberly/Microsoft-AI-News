@@ -31,8 +31,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.integrations import bootstrap
-from app.models import Digest, Preferences, Source, User
+from app.integrations import bootstrap, email
+from app.integrations.digest_renderer import render_html, render_subject
+from app.integrations.fetch_state import persisted_fetch_state
+from app.models import Article, Digest, DigestItem, Preferences, Source, User
 
 log = logging.getLogger(__name__)
 
@@ -58,24 +60,41 @@ def run() -> dict:
         if not eligible:
             return {"eligible_users": 0, "generated": 0, "failed": 0}
 
-        pipeline = _build_pipeline()
-        if pipeline is None:
+        built = _build_pipeline()
+        if built is None:
             log.warning("digest_worker: pipeline unavailable; skipping run")
             return {"eligible_users": len(eligible), "generated": 0, "failed": 0, "skipped_reason": "pipeline_unavailable"}
+        pipeline, vector_store = built
 
         generated = 0
         failed = 0
-        for user in eligible:
-            try:
-                _generate_for_user(db, pipeline, user)
-                db.commit()
-                generated += 1
-            except Exception:
-                log.exception("digest_worker: generation failed for user %s", user.id)
-                db.rollback()
-                failed += 1
+        emailed = 0
+        # Bracket the per-user loop with restore/save of the RSS fetcher's
+        # watermarks (L4). The fetcher reads/writes a JSON file under the
+        # hood; we just keep that file in sync with Postgres so Container
+        # Apps cold starts don't lose state.
+        with persisted_fetch_state(db):
+            for user in eligible:
+                try:
+                    digest = _generate_for_user(db, pipeline, vector_store, user)
+                    db.commit()
+                    generated += 1
+                    # Email is best-effort: a Resend outage shouldn't fail the
+                    # generation we just committed. _deliver_email opens its own
+                    # session to update sent_at.
+                    if digest is not None and _deliver_email(user, digest):
+                        emailed += 1
+                except Exception:
+                    log.exception("digest_worker: generation failed for user %s", user.id)
+                    db.rollback()
+                    failed += 1
 
-        return {"eligible_users": len(eligible), "generated": generated, "failed": failed}
+        return {
+            "eligible_users": len(eligible),
+            "generated": generated,
+            "emailed": emailed,
+            "failed": failed,
+        }
 
 
 # ----------------------------------------------------------------------
@@ -179,23 +198,81 @@ def _is_delivery_day(frequency: str, delivery_day: str, local_now: datetime) -> 
 # ----------------------------------------------------------------------
 
 
-def _generate_for_user(db: Session, pipeline, user: User) -> None:
+def _generate_for_user(
+    db: Session,
+    pipeline,
+    vector_store,
+    user: User,
+) -> Digest | None:
     """
-    Run the pipeline for one user and persist the result.
+    Run the pipeline for one user, persist the result, and return the
+    newly-created Digest row (or None if the user has no preferences).
 
     Imports from `app.integrations.llm_bridge` are deferred to the call
     site so a failure to import the pipeline (e.g. missing dependency)
     doesn't break the rest of the backend on app boot.
+
+    Defensive embedding (L3 audit): we explicitly call
+    `vector_store.index_articles` before `persist_digest`. The pipeline
+    may or may not call it internally depending on its execution path;
+    calling it here is idempotent and guarantees the `articles.embedding`
+    column is populated so chat retrieval finds these articles later.
     """
     from app.integrations.llm_bridge import persist_digest, user_to_profile
 
     if user.preferences is None:
         log.info("digest_worker: user %s has no preferences; skipping", user.id)
-        return
+        return None
 
     profile = user_to_profile(user, user.preferences)
     newsletter = asyncio.run(pipeline.run_for_user(profile))
-    persist_digest(db, user, newsletter, fallback_source_id=_PIPELINE_SOURCE_ID)
+
+    # Ensure articles have embeddings before persisting digest items that
+    # reference them. Index by URL match — re-indexing existing articles
+    # is a cheap no-op (upsert with same value).
+    pipeline_articles = [entry.article for entry in newsletter.articles]
+    if pipeline_articles:
+        try:
+            vector_store.index_articles(pipeline_articles)
+        except Exception:
+            # Don't kill digest generation if embedding fails — the digest
+            # still works, chat retrieval just won't find these articles.
+            log.exception("digest_worker: embedding pass failed for user %s", user.id)
+
+    return persist_digest(db, user, newsletter, fallback_source_id=_PIPELINE_SOURCE_ID)
+
+
+def _deliver_email(user: User, digest: Digest) -> bool:
+    """
+    Render the digest as HTML and send via Resend. Returns True on
+    accepted send; stamps `digest.sent_at` so it's not retried.
+
+    Opens its own DB session because the worker's session has already
+    been committed and closed for this iteration.
+    """
+    if not email.is_configured():
+        return False
+
+    with SessionLocal() as send_db:
+        # Reload the digest within this session so we can mutate it.
+        fresh = send_db.get(Digest, digest.id)
+        if fresh is None or fresh.sent_at is not None:
+            return False
+
+        items_with_articles: list[tuple[DigestItem, Article]] = []
+        for item in fresh.items:
+            article = send_db.get(Article, item.article_id)
+            if article is not None:
+                items_with_articles.append((item, article))
+
+        html = render_html(fresh, items_with_articles)
+        subject = render_subject(fresh, len(items_with_articles))
+
+        ok = email.send_digest(to_email=user.email, subject=subject, html=html)
+        if ok:
+            fresh.sent_at = datetime.now(timezone.utc)
+            send_db.commit()
+        return ok
 
 
 # ----------------------------------------------------------------------
@@ -205,13 +282,13 @@ def _generate_for_user(db: Session, pipeline, user: User) -> None:
 
 def _build_pipeline():
     """
-    Instantiate the LLM pipeline once per worker run, wired to the backend's
-    pgvector-backed vector store so embeddings and articles share one
-    source of truth (Postgres `articles` table).
+    Instantiate the LLM pipeline + the vector store it shares with the
+    backend, both once per worker run. Returns (pipeline, vector_store)
+    or None if imports / construction fail.
 
-    Returns None and logs the reason if imports fail or required config
-    (LLM API key, etc.) is missing — the webhook then reports
-    `skipped_reason: pipeline_unavailable` instead of 500ing.
+    The vector store is returned alongside the pipeline so _generate_for_user
+    can call `index_articles` defensively after generation — see L3 note
+    in that function.
     """
     try:
         bootstrap.ensure_pipeline_importable()
@@ -223,7 +300,7 @@ def _build_pipeline():
 
     try:
         vector_store = ArticleVectorStore(fallback_source_id=_PIPELINE_SOURCE_ID)
-        return NewsPipeline(vector_store=vector_store)
+        return NewsPipeline(vector_store=vector_store), vector_store
     except Exception:
         log.exception("digest_worker: pipeline construction failed")
         return None
