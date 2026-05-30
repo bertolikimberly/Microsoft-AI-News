@@ -1,8 +1,10 @@
 # Local dev stack for the backend.
 #
-#   docker compose up -d        # start Postgres in the background
-#   docker compose down         # stop, keep data
-#   docker compose down -v      # stop and wipe data
+#   docker compose up -d              # start Postgres + backend
+#   docker compose up -d postgres     # Postgres only (when running uvicorn on host)
+#   docker compose up --build api     # rebuild the backend image and start it
+#   docker compose down               # stop, keep data
+#   docker compose down -v            # stop and wipe data
 #
 # Uses the official pgvector image (Postgres 16 with the `vector` extension
 # pre-installed). The backend's startup code runs CREATE EXTENSION IF NOT
@@ -27,6 +29,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: mainews-api
+    container_name: mai-news-api
+    env_file:
+      - backend/.env
+    # Override DATABASE_URL from .env: inside the compose network the
+    # Postgres host is the service name `postgres`, not localhost.
+    environment:
+      DATABASE_URL: postgresql+psycopg://mai:mai@postgres:5432/mai_news
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

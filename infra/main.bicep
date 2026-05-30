@@ -22,7 +22,16 @@
 //
 // Deploy:
 //   az login
-//   az group create --name mai-news-rg --location westeurope
+//   az group create --name mai-news-rg --location francecentral
+// (This subscription has TWO stacked region policies:
+//   - subscription-level: francecentral, spaincentral, germanywestcentral,
+//                         swedencentral, austriaeast
+//   - management-group-level: europe, northeurope, westeurope,
+//                             francecentral, uksouth, switzerlandnorth,
+//                             swedencentral
+// The intersection — the only regions allowed by BOTH — is
+// francecentral and swedencentral. francecentral is the default:
+// closer to Spain, lower latency, EUR pricing.)
 //   az deployment group create \
 //     --resource-group mai-news-rg \
 //     --template-file infra/main.bicep \
@@ -38,7 +47,7 @@ targetScope = 'resourceGroup'
 
 // ─── Parameters ───────────────────────────────────────────────────────
 
-@description('Location for all resources. Pick something close to your users; westeurope keeps costs in EUR and works for EU users.')
+@description('Location for all resources. Inherits from the resource group. Stacked subscription + management-group region policies restrict this deployment to francecentral or swedencentral — francecentral is the default.')
 param location string = resourceGroup().location
 
 @description('Short project name. Used as a prefix for resource names. Lowercase letters/numbers only.')
@@ -59,13 +68,23 @@ param postgresAdminPassword string
 @description('Frontend origin allowed by backend CORS. Update once Static Web App URL is known.')
 param frontendUrl string = ''
 
+@description('Container registry hostname. Leave empty for public images (no auth). For ghcr.io with a private package, set to "ghcr.io" and supply registryUsername + registryPassword.')
+param registryServer string = ''
+
+@description('Container registry username. For ghcr.io this is a GitHub username with read:packages on the image.')
+param registryUsername string = ''
+
+@description('Container registry password / token. For ghcr.io this is a GitHub PAT with the read:packages scope. Pass via --parameters at deploy time; do not commit.')
+@secure()
+param registryPassword string = ''
+
 // ─── Names (composed from projectName + uniqueness suffix) ────────────
 
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var postgresName = '${projectName}-pg-${uniqueSuffix}'
 var containerAppEnvName = '${projectName}-cae'
 var containerAppName = '${projectName}-api'
-var staticWebAppName = '${projectName}-web'
+// var staticWebAppName = '${projectName}-web'  // re-enable with the SWA resource below
 var logAnalyticsName = '${projectName}-logs'
 
 // ─── Log Analytics (Container Apps needs a workspace) ────────────────
@@ -193,7 +212,9 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       // Runtime secrets — values are placeholders; replace with
       // `az containerapp secret set` after the initial deployment.
       // sentinel value `replace-me` makes accidental boots loud.
-      secrets: [
+      // The registry-password entry is only included when pulling from
+      // a private registry (registryServer != '').
+      secrets: empty(registryServer) ? [
         { name: 'database-url', value: 'postgresql+psycopg://${postgresAdminUser}:${postgresAdminPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/mai_news?sslmode=require' }
         { name: 'jwt-secret', value: 'replace-me' }
         { name: 'entra-tenant-id', value: 'replace-me' }
@@ -202,7 +223,30 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'openai-api-key', value: 'replace-me' }
         { name: 'anthropic-api-key', value: 'replace-me' }
         { name: 'resend-api-key', value: 'replace-me' }
+        { name: 'resend-from', value: 'replace-me' }
         { name: 'worker-shared-secret', value: 'replace-me' }
+      ] : [
+        { name: 'database-url', value: 'postgresql+psycopg://${postgresAdminUser}:${postgresAdminPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/mai_news?sslmode=require' }
+        { name: 'jwt-secret', value: 'replace-me' }
+        { name: 'entra-tenant-id', value: 'replace-me' }
+        { name: 'entra-client-id', value: 'replace-me' }
+        { name: 'entra-client-secret', value: 'replace-me' }
+        { name: 'openai-api-key', value: 'replace-me' }
+        { name: 'anthropic-api-key', value: 'replace-me' }
+        { name: 'resend-api-key', value: 'replace-me' }
+        { name: 'resend-from', value: 'replace-me' }
+        { name: 'worker-shared-secret', value: 'replace-me' }
+        { name: 'registry-password', value: registryPassword }
+      ]
+      // Private registry credentials (e.g. ghcr.io with a private package).
+      // When registryServer is empty the array is empty and Container Apps
+      // pulls anonymously, which works for public images.
+      registries: empty(registryServer) ? [] : [
+        {
+          server: registryServer
+          username: registryUsername
+          passwordSecretRef: 'registry-password'
+        }
       ]
     }
     template: {
@@ -228,14 +272,27 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ENTRA_TENANT_ID', secretRef: 'entra-tenant-id' }
             { name: 'ENTRA_CLIENT_ID', secretRef: 'entra-client-id' }
             { name: 'ENTRA_CLIENT_SECRET', secretRef: 'entra-client-secret' }
+            // Deterministic FQDN for the Container App = <appname>.<env-default-domain>.
+            // Computing it here means the redirect URI is correct from the
+            // first deploy without a second pass. Don't forget to ALSO add
+            // this exact URL to the Entra App Registration's allowed
+            // redirects (Entra portal → App → Authentication).
+            { name: 'ENTRA_REDIRECT_URI', value: 'https://${containerAppName}.${containerAppEnv.properties.defaultDomain}/api/v1/auth/callback' }
             { name: 'OPENAI_API_KEY', secretRef: 'openai-api-key' }
             { name: 'ANTHROPIC_API_KEY', secretRef: 'anthropic-api-key' }
             { name: 'RESEND_API_KEY', secretRef: 'resend-api-key' }
+            { name: 'RESEND_FROM', secretRef: 'resend-from' }
             { name: 'WORKER_SHARED_SECRET', secretRef: 'worker-shared-secret' }
             { name: 'FRONTEND_URL', value: frontendUrl }
             { name: 'ALLOWED_ORIGINS', value: frontendUrl }
             { name: 'EMBEDDING_MODEL', value: 'all-MiniLM-L6-v2' }
             { name: 'EMBEDDING_DIM', value: '384' }
+            // L4 — RSS fetcher writes per-source watermarks here. The backend's
+            // digest worker (app/integrations/fetch_state.py) brackets each
+            // run with restore-from / save-to Postgres so state survives the
+            // Container Apps scale-to-zero recycle. /tmp is fine because the
+            // restore/save is the durability layer.
+            { name: 'FETCH_STATE_PATH', value: '/tmp/fetch_state.json' }
           ]
           probes: [
             {
@@ -289,26 +346,31 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 // ─── Static Web App (frontend) ───────────────────────────────────────
 //
-// Created on the Free tier; deploy artifacts via the Static Web Apps
-// GitHub Action (see .github/workflows/deploy-frontend.yml).
-resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
-  name: staticWebAppName
-  location: location
-  sku: {
-    name: 'Free'
-    tier: 'Free'
-  }
-  properties: {
-    // GitHub linkage is configured by the SWA GitHub Action workflow at
-    // deploy time, not in IaC, so we leave repositoryUrl empty here.
-    provider: 'Custom'
-  }
-}
+// DISABLED for this subscription: Microsoft.Web/staticSites is only
+// available in centralus, eastus2, westus2, westeurope, eastasia —
+// none of which intersect with this subscription's stacked region
+// policies (allowed EU set: francecentral, swedencentral). Re-enable
+// once on a subscription without the region restriction, or pair with
+// an Azure Storage static website in francecentral as a substitute.
+//
+// resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
+//   name: staticWebAppName
+//   location: location
+//   sku: {
+//     name: 'Free'
+//     tier: 'Free'
+//   }
+//   properties: {
+//     // GitHub linkage is configured by the SWA GitHub Action workflow at
+//     // deploy time, not in IaC, so we leave repositoryUrl empty here.
+//     provider: 'Custom'
+//   }
+// }
 
 // ─── Outputs ─────────────────────────────────────────────────────────
 
 output backendUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output postgresFqdn string = postgres.properties.fullyQualifiedDomainName
 output postgresDatabaseName string = postgresDatabase.name
-output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
-output staticWebAppName string = staticWebApp.name
+// output staticWebAppDefaultHostname string = staticWebApp.properties.defaultHostname
+// output staticWebAppName string = staticWebApp.name
