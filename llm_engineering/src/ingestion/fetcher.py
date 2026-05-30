@@ -8,14 +8,18 @@ Two-step content pipeline:
 
 arXiv feeds are high-volume — a keyword relevance filter is applied before returning.
 
-Incremental ingestion: per-source watermarks are persisted to fetch_state.json so
-reruns never re-ingest the same article twice (same pattern as data_engineering/).
+Incremental ingestion: per-source watermarks are persisted to a JSON file so
+reruns never re-ingest the same article twice. The file path is configurable
+via FETCH_STATE_PATH; the backend wraps each run with a Postgres-backed
+restore/save (see backend/app/integrations/fetch_state.py) so state survives
+Container Apps scale-to-zero restarts.
 """
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -38,7 +42,21 @@ _ARXIV_KEYWORDS = {
 
 _CONTENT_TAGS = ["p", "h1", "h2", "h3", "li"]
 
-_STATE_FILE = Path(__file__).parent.parent.parent / "data" / "fetch_state.json"
+
+def _state_file_path() -> Path:
+    """
+    Where the watermark state lives. Set FETCH_STATE_PATH on the container
+    to point at a path the backend brackets with restore/save (so state
+    survives Container Apps cold starts). Defaults to the original location
+    next to the package for local dev.
+    """
+    override = os.environ.get("FETCH_STATE_PATH")
+    if override:
+        return Path(override)
+    return Path(__file__).parent.parent.parent / "data" / "fetch_state.json"
+
+
+_STATE_FILE = _state_file_path()
 
 
 # ---------------------------------------------------------------------------
