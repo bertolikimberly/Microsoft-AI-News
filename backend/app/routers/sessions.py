@@ -11,6 +11,7 @@ Azure OpenAI streaming in behind the same surface.
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
@@ -20,7 +21,9 @@ from sqlalchemy.orm import Session
 
 from app.deps import current_user, get_db
 from app.errors import problem
-from app.models import Article, ChatSession, ChatTurn, User
+from app.models import Article, ChatSession, ChatTurn, User, Preferences
+
+log = logging.getLogger(__name__)
 from app.pagination import Page, PageInfo, decode_cursor, encode_cursor
 from app.schemas.chat import (
     MessageIn,
@@ -297,28 +300,13 @@ def post_message(
     db.commit()
     db.refresh(user_turn)
 
-    # 2. Pick a "citation" — most recent article in the DB so the frontend
-    # has something to render. Real RAG picks via retrieval.
-    #
-    # We materialize the article's fields into a plain dict *now*, before
-    # the StreamingResponse body iterator starts running. FastAPI closes
-    # the request-scoped DB session as soon as this handler returns, so any
-    # ORM access from inside `event_stream` would hit DetachedInstanceError
-    # on lazy relationships (e.g. `article.source`).
-    sample_article = (
-        db.query(Article).order_by(desc(Article.published_at)).first()
-    )
-    sample_citation: dict | None = None
-    if sample_article is not None:
-        sample_citation = {
-            "article_id": sample_article.id,
-            "title": sample_article.title,
-            "source": sample_article.source.name if sample_article.source else "",
-            "url": sample_article.url,
-            "published_at": sample_article.published_at.isoformat(),
-        }
+    # 2. Extract conversation history and user preferences for the LLM.
+    # Both are needed before the request-scoped DB session closes.
+    history_tuples = _extract_chat_history(db, sess_id=sess.id, limit=6)
+    user_prefs = user.preferences or Preferences()  # fallback if no prefs set
 
-    # Capture the session id as a plain string for the same reason.
+    # Capture values as plain types before the generator runs (request-scoped
+    # DB session closes when this handler returns).
     sess_id = sess.id
     user_content = body.content
 
@@ -326,36 +314,78 @@ def post_message(
         # Generate the assistant turn ID up-front so turn_start matches the
         # row we eventually persist.
         from app.models.chat import _new_message_id  # local import: avoid widening top-level deps
+        from app.db.session import SessionLocal
         msg_id = _new_message_id()
 
         yield _sse("turn_start", {"message_id": msg_id})
 
-        tokens = _stub_reply_tokens(user_content)
-        for tok in tokens:
-            yield _sse("token", {"content": tok})
+        # Try to call the real LLM pipeline. If unavailable, fall back to stub.
+        answer_text = ""
+        real_citations: list[dict] = []
+        prompt_tokens = 0
+        completion_tokens = 0
 
-        citations_for_db: list[dict] = []
-        if sample_citation is not None:
-            yield _sse("citation", {"index": 1, **sample_citation})
-            yield _sse("token", {"content": " [1]."})
-            citations_for_db = [{"article_id": sample_citation["article_id"], "index": 1}]
+        try:
+            from app.integrations.llm_bridge import chat_reply
+            answer_text, real_citations, prompt_tokens, completion_tokens = chat_reply(
+                db=db,
+                user=user,
+                prefs=user_prefs,
+                query=user_content,
+                history=history_tuples,
+            )
+        except RuntimeError as e:
+            # Pipeline unavailable (import failed, vector store down, etc.)
+            # Fall back to stub response.
+            log.warning(f"chat_reply unavailable, falling back to stub: {e}")
+            stub_tokens = _stub_reply_tokens(user_content)
+            answer_text = "".join(stub_tokens)
+            real_citations = []
+            prompt_tokens = 0
+            completion_tokens = 0
+            stub_tokens = stub_tokens  # used below
+
+        # Stream the answer as tokens. If we got a real answer, split by words.
+        # If we fell back to stub, the stub already returns chunks.
+        if real_citations or prompt_tokens > 0:
+            # Real response: split answer by words for token-like chunks
+            words = answer_text.split()
+            for word in words:
+                yield _sse("token", {"content": word + " "})
         else:
-            yield _sse("token", {"content": "."})
+            # Stub response: stream the pre-chunked tokens
+            for tok in stub_tokens:
+                yield _sse("token", {"content": tok})
+
+        # Stream real citations from RAG retrieval
+        citations_for_db: list[dict] = []
+        for cite in real_citations:
+            yield _sse("citation", {
+                "index": cite["index"],
+                "article_id": cite["article_id"],
+                "title": cite["title"],
+                "source": cite["source"],
+                "url": cite["url"],
+                "published_at": cite["published_at"],
+            })
+            citations_for_db.append({
+                "article_id": cite["article_id"],
+                "index": cite["index"],
+            })
 
         # Persist the assistant turn at end-of-stream. We open a fresh
         # session because the request-scoped one closes when the response
         # generator starts streaming.
-        from app.db.session import SessionLocal
         with SessionLocal() as write_db:
             write_db.add(
                 ChatTurn(
                     id=msg_id,
                     session_id=sess_id,
                     role="assistant",
-                    content="".join(tokens) + (" [1]." if sample_citation else "."),
+                    content=answer_text,
                     citations_json=json.dumps(citations_for_db),
-                    prompt_tokens=0,  # placeholders — LLME wires real counts
-                    completion_tokens=0,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                 )
             )
             touched = write_db.get(ChatSession, sess_id)
@@ -367,8 +397,7 @@ def post_message(
             "turn_end",
             {
                 "message_id": msg_id,
-                # Placeholder telemetry. LLME wires real tokenizer counts here.
-                "tokens_used": {"prompt": 0, "completion": 0},
+                "tokens_used": {"prompt": prompt_tokens, "completion": completion_tokens},
             },
         )
 
