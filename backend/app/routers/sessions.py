@@ -84,6 +84,37 @@ def _turn_to_out(db: Session, turn: ChatTurn) -> MessageOut:
     )
 
 
+def _extract_chat_history(
+    db: Session,
+    session_id: str,
+    limit: int = 6,
+) -> list[tuple[str, str]]:
+    """
+    Extract the last N turns from a chat session as (role, content) tuples.
+
+    Returns in chronological order (oldest first). The chatbot trims internally
+    but we trim here too (last 6 turns = ~12 messages max) to avoid expensive
+    LLM calls with huge context windows.
+
+    Args:
+        db: Database session
+        session_id: Chat session ID
+        limit: Max number of turns to return (will return up to limit*2 messages)
+
+    Returns:
+        List of (role, content) tuples, ordered oldest-first, ready to pass to chatbot
+    """
+    turns = (
+        db.query(ChatTurn)
+        .filter(ChatTurn.session_id == session_id)
+        .order_by(ChatTurn.created_at.desc())
+        .limit(limit * 2)  # each turn = up to 2 messages (user + assistant)
+        .all()
+    )
+    # Reverse to get chronological order (oldest first)
+    return [(t.role, t.content) for t in reversed(turns)]
+
+
 # ─── Session CRUD ─────────────────────────────────────────────────────────
 
 
