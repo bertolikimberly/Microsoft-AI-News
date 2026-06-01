@@ -284,7 +284,12 @@ def post_message(
     """
     sess = _load_session(db, user, session_id)
 
-    # 1. Persist the user turn synchronously so it can't be lost on disconnect.
+    # 1. Extract history and prefs BEFORE persisting the current user turn so
+    # the new message is not included in the history passed to the chatbot.
+    history_tuples = _extract_chat_history(db, session_id=sess.id, limit=6)
+    user_prefs = user.preferences or Preferences()  # fallback if no prefs set
+
+    # 2. Persist the user turn synchronously so it can't be lost on disconnect.
     user_turn = ChatTurn(
         session_id=sess.id,
         role="user",
@@ -299,11 +304,6 @@ def post_message(
     sess.updated_at = _utcnow()
     db.commit()
     db.refresh(user_turn)
-
-    # 2. Extract conversation history and user preferences for the LLM.
-    # Both are needed before the request-scoped DB session closes.
-    history_tuples = _extract_chat_history(db, session_id=sess.id, limit=6)
-    user_prefs = user.preferences or Preferences()  # fallback if no prefs set
 
     # Capture values as plain types before the generator runs (request-scoped
     # DB session closes when this handler returns).
