@@ -62,10 +62,18 @@ def build_newsletter_user_message(
         for i, a in enumerate(articles)
     )
 
+    interest_parts = [s.replace("_", " ") for s in user.topic_tags]
+    if user.business_tags:
+        interest_parts += [s.replace("_", " ") for s in user.business_tags]
+    if user.regulation_tags:
+        interest_parts += [s.replace("_", " ") for s in user.regulation_tags]
+    interests = ", ".join(interest_parts) or "general technology"
+
     return f"""USER PROFILE:
 - Name: {user.name}
-- Role: {user.role}
-- Interests: {', '.join(i.value for i in user.interests)}
+- Role: {user.role or 'not specified'}
+- Interests: {interests}
+- Regions of interest: {', '.join(user.regions) or 'global'}
 - Companies tracking: {', '.join(user.companies_to_track) or 'None specified'}
 - {tone_note}
 

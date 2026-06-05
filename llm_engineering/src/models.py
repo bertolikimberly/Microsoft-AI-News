@@ -1,54 +1,66 @@
+"""
+Pipeline Pydantic models.
+
+The tag taxonomy mirrors the backend's multi-dimensional design — see
+docs/personas_and_features.md and backend/app/seed.tag_slug. Every tag is
+a (dimension, slug) pair; the pipeline stores slugs grouped by dimension
+on Article and UserProfile so a single article can carry a topic tag
+*and* a business tag *and* a regulation tag without collapsing them into
+a single enum value.
+
+The previous flat `TechCategory` enum has been removed: it forced
+information-losing collapses (e.g. M&A → STARTUPS, Cybersecurity Policy →
+SECURITY) that broke fidelity between the data team's taxonomy and the
+LLM pipeline. The pipeline now passes through slugs verbatim.
+"""
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
-# Taxonomy
+# Enums kept on the pipeline side (no equivalent in backend Preferences yet)
 # ---------------------------------------------------------------------------
-
-class TechCategory(str, Enum):
-    AI_ML = "ai_ml"
-    CLOUD = "cloud"
-    SECURITY = "security"
-    DEVELOPER_TOOLS = "developer_tools"
-    HARDWARE = "hardware"
-    ENTERPRISE_SOFTWARE = "enterprise_software"
-    STARTUPS = "startups"
-    POLICY_REGULATION = "policy_regulation"
-    OPEN_SOURCE = "open_source"
-    OTHER = "other"
-
 
 class DigestFrequency(str, Enum):
     DAILY = "daily"
+    WEEKDAYS = "weekdays"
     WEEKLY = "weekly"
 
 
 class TonePreference(str, Enum):
-    EXECUTIVE = "executive"    # high-level, strategic, no jargon
-    TECHNICAL = "technical"    # deep dives, implementation details
-    BALANCED = "balanced"      # mix of both
+    EXECUTIVE = "executive"
+    TECHNICAL = "technical"
+    BUSINESS = "business"
 
 
 # ---------------------------------------------------------------------------
-# Article (the atomic unit of news)
+# Article — flat representation of a fetched + tagged article
 # ---------------------------------------------------------------------------
 
 class Article(BaseModel):
-    id: str                          # sha256 of url, used as chroma doc id
+    """
+    One article moving through the pipeline. Tag fields hold backend
+    slugs (e.g. "artificial_intelligence_ml", not "Artificial Intelligence & ML").
+    """
+    id: str
     url: str
     title: str
-    source: str                      # e.g. "TechCrunch", "The Verge"
+    source: str                      # human-friendly source name
     published_at: datetime
-    content: str                     # cleaned full text or best excerpt
-    summary: Optional[str] = None    # LLM-generated, filled later
-    categories: list[TechCategory] = []
+    content: str
+    summary: Optional[str] = None
+
+    # Multi-dimensional tags — mirrors the backend Tag taxonomy.
+    topic_tags: list[str] = Field(default_factory=list)
+    business_tags: list[str] = Field(default_factory=list)
+    regulation_tags: list[str] = Field(default_factory=list)
+    regions: list[str] = Field(default_factory=list)
+
     source_type: str = "secondary"   # "primary" | "secondary" | "aggregator"
-    relevance_score: float = 0.0     # set during retrieval
-    embedding_id: Optional[str] = None  # chroma doc id after indexing
+    relevance_score: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -56,15 +68,25 @@ class Article(BaseModel):
 # ---------------------------------------------------------------------------
 
 class UserProfile(BaseModel):
+    """
+    Pipeline's view of a backend user. Tag lists are slug arrays per
+    dimension, matching the columns on backend Preferences.
+    """
     user_id: str
     name: str
     email: str
-    role: str                          # e.g. "Sales Engineer", "PM", "CTO"
-    interests: list[TechCategory]
-    companies_to_track: list[str] = [] # e.g. ["OpenAI", "Google", "AWS"]
-    tone: TonePreference = TonePreference.BALANCED
-    digest_frequency: DigestFrequency = DigestFrequency.DAILY
-    # Used to personalize ranking weights — updated from implicit feedback
+    role: Optional[str] = None                    # role-dimension tag slug
+
+    topic_tags: list[str] = Field(default_factory=list)
+    business_tags: list[str] = Field(default_factory=list)
+    regulation_tags: list[str] = Field(default_factory=list)
+    regions: list[str] = Field(default_factory=list)
+
+    companies_to_track: list[str] = Field(default_factory=list)
+    tone: TonePreference = TonePreference.TECHNICAL
+    digest_frequency: DigestFrequency = DigestFrequency.WEEKLY
+
+    # Implicit-feedback weights for the ranker (F10).
     topic_weights: dict[str, float] = Field(default_factory=dict)
 
 
@@ -76,9 +98,9 @@ class DigestArticle(BaseModel):
     """One ranked item inside a newsletter."""
     article: Article
     rank: int
-    reason: str      # why it was ranked here (for explainability)
-    summary: str     # personalized 2-3 sentence summary
-    citation: str    # "Source: {source} — {url}"
+    reason: str
+    summary: str
+    citation: str
 
 
 class NewsletterDigest(BaseModel):
@@ -86,7 +108,7 @@ class NewsletterDigest(BaseModel):
     user_id: str
     generated_at: datetime
     articles: list[DigestArticle]
-    intro: str          # personalized opening paragraph
+    intro: str
     token_cost: TokenUsage
 
 
@@ -95,7 +117,7 @@ class NewsletterDigest(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ChatMessage(BaseModel):
-    role: str   # "user" or "assistant"
+    role: str
     content: str
 
 

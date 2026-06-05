@@ -12,7 +12,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 from sentence_transformers import SentenceTransformer
 
-from src.models import Article, TechCategory
+from src.models import Article
 from config.settings import settings
 
 
@@ -75,23 +75,22 @@ class ArticleVectorStore:
         self,
         query: str,
         top_k: int = 8,
-        category_filter: Optional[list[TechCategory]] = None,
+        topic_filter: Optional[list[str]] = None,
     ) -> list[tuple[Article, float]]:
         """
         Returns (article, similarity_score) pairs, highest first.
-        category_filter restricts results to articles containing any of the given categories.
+        topic_filter restricts results to articles tagged with any of the
+        given topic slugs (e.g. ["artificial_intelligence_ml", "cybersecurity"]).
         """
         query_embedding = self._encoder.encode(
             [query], normalize_embeddings=True, show_progress_bar=False
         ).tolist()
 
         where = None
-        if category_filter:
-            # Chroma supports $in for array containment via metadata field
-            # We store categories as a comma-separated string for simplicity
+        if topic_filter:
             where = {
-                "categories": {
-                    "$in": [c.value for c in category_filter]
+                "primary_topic": {
+                    "$in": list(topic_filter),
                 }
             }
 
@@ -124,19 +123,27 @@ class ArticleVectorStore:
 
     @staticmethod
     def _article_to_metadata(article: Article) -> dict:
+        # Chroma metadata is flat — we surface the primary topic slug for
+        # the `topic_filter` predicate and join the rest into a CSV the
+        # caller can split if needed.
         return {
             "id": article.id,
             "url": article.url,
             "title": article.title,
             "source": article.source,
             "published_at": article.published_at.isoformat(),
-            # Store first category as string (Chroma metadata is flat)
-            "categories": article.categories[0].value if article.categories else "other",
+            "primary_topic": article.topic_tags[0] if article.topic_tags else "",
+            "topic_tags": ",".join(article.topic_tags),
+            "business_tags": ",".join(article.business_tags),
+            "regulation_tags": ",".join(article.regulation_tags),
+            "regions": ",".join(article.regions),
         }
 
     @staticmethod
     def _metadata_to_article(metadata: dict, document: str) -> Article:
         from datetime import datetime
+        def _split(v: str) -> list[str]:
+            return [s for s in (v or "").split(",") if s]
         return Article(
             id=metadata["id"],
             url=metadata["url"],
@@ -144,5 +151,8 @@ class ArticleVectorStore:
             source=metadata["source"],
             published_at=datetime.fromisoformat(metadata["published_at"]),
             content=document,
-            categories=[TechCategory(metadata.get("categories", "other"))],
+            topic_tags=_split(metadata.get("topic_tags", "")),
+            business_tags=_split(metadata.get("business_tags", "")),
+            regulation_tags=_split(metadata.get("regulation_tags", "")),
+            regions=_split(metadata.get("regions", "")),
         )

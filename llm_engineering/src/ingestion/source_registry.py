@@ -1,25 +1,27 @@
 """
-Source registry — loads and queries sources.json.
+Source registry — loads sources.json and exposes filtered views.
 
-Canonical source: the repo-root sources.json (shared across all modules).
-Falls back to llm_engineering/config/sources.json if the root file is absent
-(useful when running this module standalone outside the monorepo).
+Canonical source: the repo-root sources.json (shared with the data team
+and the backend's `seed_sources`). Falls back to llm_engineering/config/
+sources.json if the root file is absent (useful when the pipeline runs
+standalone outside the monorepo).
 
-Provides filtered views of sources by scrape tier, topic tag, region, or user profile.
-
-Source ID aliases: data_engineering/sources.py uses shorter IDs (e.g. "mit_tech_review")
-while sources.json uses full IDs (e.g. "mit_technology_review"). Both resolve correctly
-via get_source_by_id() so adapters can work with either format.
+Tags are stored as slugs (e.g. "artificial_intelligence_ml") derived
+from the human labels in sources.json via the same `tag_slug` rule the
+backend's seed uses. The pipeline-side flat `TechCategory` enum is gone
+— sources carry slugs across all backend tag dimensions, and matching
+against users is done by slug overlap per dimension.
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Optional
 
-from src.models import TechCategory, UserProfile
+from src.models import UserProfile
 
 # Prefer repo-root sources.json; fall back to local config copy
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -56,35 +58,18 @@ _DE_ID_ALIASES: dict[str, str] = {
     "the_recursive":       "the_recursive",
 }
 
-# Map JSON topic/business/regulation tag strings → our TechCategory enum
-_TAG_TO_CATEGORY: dict[str, TechCategory] = {
-    "Artificial Intelligence & ML":         TechCategory.AI_ML,
-    "Cybersecurity":                         TechCategory.SECURITY,
-    "Cybersecurity Policy":                  TechCategory.SECURITY,
-    "Cloud & Infrastructure":               TechCategory.CLOUD,
-    "Software Development":                  TechCategory.DEVELOPER_TOOLS,
-    "Hardware & Chips":                      TechCategory.HARDWARE,
-    "Data & Privacy":                        TechCategory.SECURITY,
-    "Startups & Venture":                    TechCategory.STARTUPS,
-    "M&A & Funding":                         TechCategory.STARTUPS,
-    "Big Tech (FAANG+Microsoft)":            TechCategory.ENTERPRISE_SOFTWARE,
-    "Earnings & Revenue":                    TechCategory.ENTERPRISE_SOFTWARE,
-    "IPO & Markets":                         TechCategory.STARTUPS,
-    "AI Regulation":                         TechCategory.POLICY_REGULATION,
-    "Data Protection (GDPR, DPDP, LGPD)":   TechCategory.POLICY_REGULATION,
-    "Antitrust & Competition":               TechCategory.POLICY_REGULATION,
-    "Export Controls & Sanctions":           TechCategory.POLICY_REGULATION,
-    "Digital Infrastructure Policy":         TechCategory.POLICY_REGULATION,
-    "Platform Regulation":                   TechCategory.POLICY_REGULATION,
-    "Layoffs & Hiring":                      TechCategory.ENTERPRISE_SOFTWARE,
-    "Health & Biotech":                      TechCategory.OTHER,
-    "Fintech & Payments":                    TechCategory.OTHER,
-    "Quantum Computing":                     TechCategory.OTHER,
-    "Robotics & Automation":                 TechCategory.OTHER,
-    "Clean Tech & Sustainability":           TechCategory.OTHER,
-    "Space & Satellites":                    TechCategory.OTHER,
-    "Metaverse & XR":                        TechCategory.OTHER,
-}
+
+def tag_slug(label: str) -> str:
+    """
+    Derive a stable, machine-friendly slug from a taxonomy label. Mirrors
+    backend/app/seed.tag_slug — keep the two in sync.
+
+      "Artificial Intelligence & ML"  -> "artificial_intelligence_ml"
+      "M&A & Funding"                 -> "ma_funding"
+    """
+    s = label.lower().replace("&", "")
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    return s.strip("_")
 
 
 @dataclass
@@ -97,8 +82,14 @@ class Source:
     scrape_tier: str          # "breaking" | "standard" | "daily"
     scrape_interval_min: int
     content_quality: str      # "full" | "excerpts"
-    categories: list[TechCategory] = field(default_factory=list)
-    region_tags: list[str] = field(default_factory=list)
+
+    # Slugs per backend tag dimension. Populated from the source's
+    # default_*_tags labels in sources.json via tag_slug().
+    topic_tags: list[str] = field(default_factory=list)
+    business_tags: list[str] = field(default_factory=list)
+    regulation_tags: list[str] = field(default_factory=list)
+    regions: list[str] = field(default_factory=list)
+
     source_region: Optional[str] = None
     notes: str = ""
 
@@ -111,12 +102,8 @@ class Source:
         return self.source_type == "primary"
 
 
-def _tags_to_categories(topic_tags: list, business_tags: list, regulation_tags: list) -> list[TechCategory]:
-    cats: set[TechCategory] = set()
-    for tag in topic_tags + business_tags + regulation_tags:
-        if cat := _TAG_TO_CATEGORY.get(tag):
-            cats.add(cat)
-    return list(cats) or [TechCategory.OTHER]
+def _slug_list(labels: list) -> list[str]:
+    return [tag_slug(label) for label in labels if isinstance(label, str) and label]
 
 
 @lru_cache(maxsize=1)
@@ -135,12 +122,10 @@ def load_sources() -> list[Source]:
             scrape_tier=s["scrape_tier"],
             scrape_interval_min=s["scrape_interval_min"],
             content_quality=s["content_quality"],
-            categories=_tags_to_categories(
-                s.get("default_topic_tags", []),
-                s.get("default_business_tags", []),
-                s.get("default_regulation_tags", []),
-            ),
-            region_tags=s.get("region_tags", []),
+            topic_tags=_slug_list(s.get("default_topic_tags", [])),
+            business_tags=_slug_list(s.get("default_business_tags", [])),
+            regulation_tags=_slug_list(s.get("default_regulation_tags", [])),
+            regions=_slug_list(s.get("region_tags", [])),
             source_region=s.get("source_region"),
             notes=s.get("notes", ""),
         ))
@@ -153,22 +138,31 @@ def get_sources_for_tier(tier: str) -> list[Source]:
 
 def get_sources_for_user(user: UserProfile) -> list[Source]:
     """
-    Return sources relevant to this user's interests.
-    - At least one source category overlaps with user interests, OR
-    - Source covers a Big Tech company the user tracks.
-    Always include primary sources (company blogs, gov sources) if interest matches.
+    Return sources whose tags overlap with the user's preferences along
+    any of the four content dimensions, or primary AI/ML sources for
+    users with the AI/ML topic interest (high-signal floor).
     """
-    all_sources = load_sources()
-    user_cats = set(user.interests)
+    user_topics = set(user.topic_tags)
+    user_business = set(user.business_tags)
+    user_regulation = set(user.regulation_tags)
+    user_regions = set(user.regions)
 
     relevant: list[Source] = []
-    for source in all_sources:
-        source_cats = set(source.categories)
-        if user_cats & source_cats:
+    for source in load_sources():
+        if (
+            user_topics & set(source.topic_tags)
+            or user_business & set(source.business_tags)
+            or user_regulation & set(source.regulation_tags)
+            or user_regions & set(source.regions)
+        ):
             relevant.append(source)
             continue
-        # Always include primary sources for AI/ML — they're high signal
-        if source.is_primary and TechCategory.AI_ML in source.categories:
+        # Primary AI/ML sources are high signal — always include for AI/ML users.
+        if (
+            source.is_primary
+            and "artificial_intelligence_ml" in source.topic_tags
+            and "artificial_intelligence_ml" in user_topics
+        ):
             relevant.append(source)
 
     return relevant
