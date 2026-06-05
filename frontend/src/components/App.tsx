@@ -18,14 +18,9 @@ import { PALETTES } from '@/constants/palettes'
 import { FONTS, NEWS_FONTS } from '@/constants/fonts'
 import { BENCHMARK_CARDS, NEWS_BY_TOPIC, SUGGESTIONS, TOPIC_SUGGESTIONS, TWEAKS_DEFAULTS } from '@/constants/data'
 import { readSession, writeSession } from '@/lib/session'
+import { getToken, setToken, createSession, deleteSession, streamMessage, type SseCitation } from '@/lib/api'
 import { useTweaks } from '@/hooks/useTweaks'
 import type { ChatMessage, ForumPost, NewsCard, NewsFolder, Prefs, Thread, User } from '@/types'
-
-declare global {
-  interface Window {
-    claude?: { complete: (opts: { messages: { role: string; content: string }[] }) => Promise<string> }
-  }
-}
 
 function buildBenchmarkConvo(): ChatMessage[] {
   return [
@@ -89,17 +84,31 @@ export default function App() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>('f1')
   const [activeThreadId, setActiveThreadId] = useState('th1')
   const [generalThreads, setGeneralThreads] = useState<Thread[]>([])
+  // Maps local thread ID → backend session ID
+  const sessionMap = useRef<Map<string, string>>(new Map())
 
-  const addGeneralThread = () => {
+  const addGeneralThread = async () => {
     const id = 'g' + Date.now()
     setGeneralThreads((ts) => [{ id, title: 'New chat', time: 'Now' }, ...ts])
     setActiveFolderId(null)
     setActiveThreadId(id)
     setMessages([])
+    if (getToken()) {
+      try {
+        const session = await createSession()
+        sessionMap.current.set(id, session.id)
+      } catch (err) { console.error('create session', err) }
+    }
   }
 
-  const deleteGeneralThread = (threadId: string) =>
+  const deleteGeneralThread = async (threadId: string) => {
     setGeneralThreads((ts) => ts.filter((t) => t.id !== threadId))
+    const sessionId = sessionMap.current.get(threadId)
+    if (sessionId) {
+      sessionMap.current.delete(threadId)
+      await deleteSession(sessionId).catch(() => {/* best-effort */})
+    }
+  }
 
   const pinGeneralThread = (threadId: string) =>
     setGeneralThreads((ts) => ts.map((t) => t.id === threadId ? { ...t, pinned: !t.pinned } : t))
@@ -144,7 +153,7 @@ export default function App() {
     }]
   }
 
-  const addThread = (folderId: string) => {
+  const addThread = async (folderId: string) => {
     const id = 'th' + Date.now()
     const folder = folders.find((f) => f.id === folderId)
     const briefing = folder ? buildFolderBriefing(folder) : []
@@ -158,13 +167,25 @@ export default function App() {
     setActiveFolderId(folderId)
     setActiveThreadId(id)
     setMessages(briefing)
+    if (getToken()) {
+      try {
+        const session = await createSession(firstTitle)
+        sessionMap.current.set(id, session.id)
+      } catch (err) { console.error('create session', err) }
+    }
   }
 
-  const deleteThread = (folderId: string, threadId: string) =>
+  const deleteThread = async (folderId: string, threadId: string) => {
     setFolders((fs) => fs.map((f) => f.id === folderId
       ? { ...f, threads: f.threads.filter((t) => t.id !== threadId) }
       : f
     ))
+    const sessionId = sessionMap.current.get(threadId)
+    if (sessionId) {
+      sessionMap.current.delete(threadId)
+      await deleteSession(sessionId).catch(() => {/* best-effort */})
+    }
+  }
 
   const pinThread = (folderId: string, threadId: string) =>
     setFolders((fs) => fs.map((f) => f.id === folderId
@@ -195,24 +216,71 @@ export default function App() {
     setMessages((m) => [...m, userMsg, { id: thinkingId, role: 'ai', thinking: true }])
     setBusy(true)
 
-
-    try {
-      const reply = await window.claude?.complete({
-        messages: [{
-          role: 'user',
-          content: `You are MAI news — a calm, editorial AI-news companion. You ONLY discuss artificial intelligence: models, benchmarks, research papers, releases, policy, infrastructure, the people and companies behind it.
-
-Voice: thoughtful, literary, unhurried. Lowercase is fine. No emoji. No bullet lists unless explicitly asked. Keep replies to 2–4 short paragraphs. Begin without preamble.
-
-User: ${text}`,
-        }],
-      }) ?? "i'm having trouble reaching my thoughts right now. try again in a moment."
-      setMessages((m) => m.map((msg) => msg.id === thinkingId ? { id: thinkingId, role: 'ai', content: reply } : msg))
-    } catch {
-      setMessages((m) => m.map((msg) => msg.id === thinkingId ? { id: thinkingId, role: 'ai', content: "i'm having trouble reaching my thoughts right now. try again in a moment." } : msg))
-    } finally {
+    const token = getToken()
+    if (!token) {
+      setMessages((m) => m.map((msg) => msg.id === thinkingId
+        ? { id: thinkingId, role: 'ai', content: "i'm not connected to the server right now. try signing in again." }
+        : msg))
       setBusy(false)
+      return
     }
+
+    // Ensure we have a backend session for the active thread
+    let sessionId = sessionMap.current.get(activeThreadId)
+    if (!sessionId) {
+      try {
+        const session = await createSession(text.slice(0, 80))
+        sessionId = session.id
+        sessionMap.current.set(activeThreadId, sessionId)
+      } catch {
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: "couldn't create a session. please try again." }
+          : msg))
+        setBusy(false)
+        return
+      }
+    }
+
+    // Stream the response via SSE
+    let streamedText = ''
+    const citations: SseCitation[] = []
+
+    await streamMessage(sessionId, text, {
+      onToken: (chunk) => {
+        streamedText += chunk
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText, thinking: false }
+          : msg))
+      },
+      onCitation: (c) => {
+        citations.push(c)
+      },
+      onDone: () => {
+        // Attach citations as news cards if any arrived
+        const cards: NewsCard[] | undefined = citations.length > 0
+          ? citations.map((c) => ({
+              id: c.article_id,
+              source: c.source,
+              time: new Date(c.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              kind: 'article',
+              title: c.title,
+              blurb: '',
+              tone: 'calm' as const,
+              tag: c.source,
+            }))
+          : undefined
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText, thinking: false, cards }
+          : msg))
+        setBusy(false)
+      },
+      onError: () => {
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText || "i'm having trouble reaching my thoughts right now. try again in a moment." }
+          : msg))
+        setBusy(false)
+      },
+    })
   }
 
   const openFolders = () => setPrefsOpen(true)
@@ -298,7 +366,7 @@ User: ${text}`,
         onNavigate={(v) => setCurrentView(v)}
         savedCount={savedArticles.length}
         user={user}
-        onLogout={() => { writeSession(null); setUser(null) }}
+        onLogout={() => { writeSession(null); setToken(null); sessionMap.current.clear(); setUser(null) }}
       />
 
       <main className="main">
