@@ -5,7 +5,7 @@ This router is read-only on digests themselves — writes happen from the
 digest worker (D1) via direct DB access, not the public API.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import desc, func
@@ -112,7 +112,7 @@ def post_feedback(
     )
     if existing is not None:
         existing.signal = body.signal
-        existing.created_at = datetime.utcnow()
+        existing.created_at = datetime.now(timezone.utc)
     else:
         db.add(
             Feedback(

@@ -18,6 +18,7 @@ app.seed.seed_tags.
 import uuid
 from datetime import datetime, timezone
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
     ForeignKey,
@@ -28,6 +29,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db.base import Base
 
 
@@ -94,8 +96,8 @@ class Source(Base):
 
 class Article(Base):
     """
-    One ingested article. Body text lives in Blob (`body_blob_ref`); we only
-    keep what we need to render citations and digest items.
+    One ingested article. Body text is stored inline in `body`; the vector
+    store keeps the embedding under `embedding_id` for RAG retrieval.
     """
 
     __tablename__ = "articles"
@@ -105,16 +107,27 @@ class Article(Base):
         String, ForeignKey("sources.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String, nullable=False)
-    url: Mapped[str] = mapped_column(String, nullable=False)
+    # URL is the natural dedup key. Unique-constrained so concurrent
+    # workers can't both insert the same article — the loser hits an
+    # IntegrityError on commit and falls back to the upsert path.
+    url: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     # ISO author byline — optional, depends on source.
     author: Mapped[str | None] = mapped_column(String, nullable=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), default=_utcnow
     )
-    # Short extract for hover/preview rendering. Full body lives in Blob.
+    # Short extract for hover/preview rendering.
     extract: Mapped[str | None] = mapped_column(Text, nullable=True)
-    body_blob_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Full cleaned article text — used for embedding + LLM summarisation.
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Article embedding for RAG retrieval. Dimensionality is governed by
+    # `settings.embedding_dim` (must match the encoder model). Null until
+    # the data pipeline embeds the article. Cosine similarity search uses
+    # the `<=>` operator (see backend/app/rag/vector_store.py).
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(settings.embedding_dim), nullable=True
+    )
 
     source: Mapped["Source"] = relationship()
     tags: Mapped[list["ArticleTag"]] = relationship(

@@ -1,0 +1,80 @@
+name: Build & deploy backend to Azure Container Apps
+
+# Builds the backend image, pushes it to GitHub Container Registry
+# (ghcr.io — free for public repos), and tells the Container App to roll
+# to the new image.
+#
+# Why ghcr.io instead of Azure Container Registry: ACR's cheapest tier is
+# ~$5/month, ghcr.io is free for public repos. Container Apps can pull
+# from any public registry without a credential.
+#
+# Required GitHub secrets:
+#   AZURE_CREDENTIALS         — JSON output from
+#       `az ad sp create-for-rbac --name mai-news-deploy --role contributor \
+#         --scopes /subscriptions/<sub>/resourceGroups/mai-news-rg --sdk-auth`
+#   AZURE_RESOURCE_GROUP      — e.g. mai-news-rg
+#   CONTAINER_APP_NAME        — e.g. mainews-api
+#
+# The workflow tags images with the commit SHA so rollbacks are trivial:
+#   az containerapp update --name mainews-api --resource-group mai-news-rg \
+#     --image ghcr.io/<owner>/<repo>-backend:<sha>
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'llm_engineering/**'
+      - 'sources.json'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write     # required to push to ghcr.io
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          # Build context = repo root so the Dockerfile can COPY both
+          # backend/ and llm_engineering/ + sources.json into the image.
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Roll Container App to new image
+        run: |
+          az containerapp update \
+            --name "${{ secrets.CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ github.sha }}"

@@ -15,8 +15,11 @@ pydantic-settings==2.6.0
 
 # Database. SQLAlchemy 2.0 (modern syntax with Mapped/mapped_column).
 # psycopg is the modern Postgres driver (replaces psycopg2).
+# pgvector exposes the `Vector` column type + the cosine/L2 distance ops
+# that backend/app/rag/vector_store.py uses for similarity search.
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
+pgvector==0.3.6
 
 # JWT mint + validate. crypto extra brings in cryptography for RS256 support
 # (we use HS256 in dev, RS256 in prod per docs/auth.md §4).
@@ -33,6 +36,23 @@ httpx==0.27.2
 # Used by the digest worker (summarization) and chat service (RAG).
 openai==1.54.4
 
-# Transactional email via Resend (docs/local_stack.md §4 C11).
-# Used by the digest worker to send digests + magic links / verification.
-resend==2.4.0
+# Transactional email via Azure Communication Services (matches the rest
+# of the deploy stack on Azure). Used by the digest worker to send
+# digests + magic links / verification. Switched off Resend so everything
+# is under one Azure bill and one Bicep file.
+azure-communication-email==1.0.0
+
+# ──────────────────────────────────────────────────────────────────────────
+# LLM pipeline deps — pulled in transitively when the digest worker imports
+# the sibling `llm_engineering/` package via app.integrations.bootstrap.
+# Versions track llm_engineering/requirements.txt; keep the two in sync.
+# ──────────────────────────────────────────────────────────────────────────
+anthropic>=0.40.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+tavily-python>=0.3.0
+beautifulsoup4>=4.12.0
+feedparser>=6.0.0
+tiktoken>=0.7.0
+tenacity>=8.3.0
+structlog>=24.0.0
