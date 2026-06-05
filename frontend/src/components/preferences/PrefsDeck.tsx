@@ -5,6 +5,7 @@ import { FONTS, NEWS_FONTS } from '@/constants/fonts'
 import { REGIONS_AUTH } from '@/constants/auth'
 import { PREF_ROLES, TOPIC_GROUPS, PREF_DEPTHS, PREF_DELIVERY, PREF_TONES } from '@/constants/preferences'
 import { grainSvg } from '@/lib/grain'
+import { putPreferences } from '@/lib/api'
 import type { NewsFolder, Palette, Prefs, User } from '@/types'
 
 const topicMap = Object.fromEntries(
@@ -45,7 +46,19 @@ export default function PrefsDeck({ open, onClose, palette, displayFont, newsFon
     return { id: 'f' + Date.now(), name, topics, frequency: freq, keywords: [], threads: [] }
   }
 
-  const handleFinish = () => setShowSummary(true)
+  const handleFinish = async () => {
+    try {
+      await putPreferences({
+        topics: prefs.topics ?? [],
+        regions: prefs.region ? [prefs.region] : [],
+        role: prefs.role ?? null,
+        frequency: (prefs.delivery?.[0] as 'daily' | 'weekdays' | 'weekly') ?? 'weekly',
+        length: (prefs.depth as 'short' | 'standard' | 'deep') ?? 'standard',
+        tone: (prefs.tone as 'technical' | 'business' | 'executive') ?? 'technical',
+      })
+    } catch { /* best-effort — continue to summary even if API is down */ }
+    setShowSummary(true)
+  }
 
   const confirmCreateFolder = () => {
     onCreateFolder?.(buildFolder())
@@ -257,7 +270,7 @@ export default function PrefsDeck({ open, onClose, palette, displayFont, newsFon
           {step < STEPS.length - 1 ? (
             <button className="prefs-next" onClick={() => setStep((s) => Math.min(s + 1, STEPS.length - 1))} style={{ background: palette.ink, color: palette.bg }}>Continue →</button>
           ) : (
-            <button className="prefs-next" onClick={handleFinish} style={{ background: palette.ink, color: palette.bg }}>Save preferences</button>
+            <button className="prefs-next" onClick={() => { handleFinish() }} style={{ background: palette.ink, color: palette.bg }}>Save preferences</button>
           )}
         </footer>
 

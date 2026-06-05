@@ -335,10 +335,10 @@ def post_message(
                 query=user_content,
                 history=history_tuples,
             )
-        except RuntimeError as e:
-            # Pipeline unavailable (import failed, vector store down, etc.)
-            # Fall back to stub response.
-            log.warning(f"chat_reply unavailable, falling back to stub: {e}")
+        except Exception as e:
+            # Pipeline unavailable (import failed, missing API key, vector store down, etc.)
+            # Fall back to stub response so the frontend always gets a complete stream.
+            log.warning(f"chat_reply unavailable, falling back to stub: {type(e).__name__}: {e}")
             answer_text = "".join(_stub_reply_tokens(user_content))
             used_stub = True
 

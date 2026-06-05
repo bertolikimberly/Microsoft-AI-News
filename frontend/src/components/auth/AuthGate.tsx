@@ -8,7 +8,8 @@ import MicrosoftSSOModal from '@/components/auth/MicrosoftSSOModal'
 import GoogleSSOModal from '@/components/auth/GoogleSSOModal'
 import { FONTS, NEWS_FONTS } from '@/constants/fonts'
 import { CORPORATE_DOMAIN, DEPARTMENTS, REGIONS_AUTH, SIGNUP_ROLES, SIGNUP_DELIVERY } from '@/constants/auth'
-import { writeSession } from '@/lib/session'
+import { writeSession, apiUserToLocal } from '@/lib/session'
+import { devLogin, setToken } from '@/lib/api'
 import type { Palette, User } from '@/types'
 
 interface Props {
@@ -39,7 +40,7 @@ export default function AuthGate({ palette, displayFont, newsFont, blur, grain, 
     return null
   }
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (mode === 'signin') {
@@ -57,21 +58,25 @@ export default function AuthGate({ palette, displayFont, newsFont, blur, grain, 
       if (!form.region) return setError('Please choose your region.')
     }
     setLoading(true)
-    setTimeout(() => {
-      const fallbackName = form.email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    try {
+      const { access_token, user: apiUser } = await devLogin()
+      setToken(access_token)
       const user: User = {
-        name: form.name.trim() || fallbackName,
-        email: form.email.trim().toLowerCase(),
+        ...apiUserToLocal(apiUser),
+        name: form.name.trim() || apiUserToLocal(apiUser).name,
         department: form.department || 'Engineering',
         region: form.region || 'eu',
         role: form.role || 'engineer',
         delivery: [form.delivery || 'daily'],
-        signedInAt: Date.now(),
       }
       writeSession(user)
-      setLoading(false)
       onAuthed(user)
-    }, 500)
+    } catch (err) {
+      setError('Could not connect to server. Try again.')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const completeSso = (user: User) => {
