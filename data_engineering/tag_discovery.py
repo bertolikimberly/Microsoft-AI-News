@@ -3,6 +3,7 @@ tag_discovery.py — RSS tag discovery pipeline
 Ingests articles, runs NER + BERTopic, writes tag_discovery_report.md
 """
 
+import os
 import re
 import sys
 import string
@@ -38,6 +39,14 @@ from bs4 import BeautifulSoup
 from bertopic import BERTopic
 from nltk.corpus import stopwords
 from sklearn.cluster import KMeans
+
+# Optional — used only for LLM topic naming; falls back gracefully if absent.
+try:
+    import anthropic as _anthropic_module
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _anthropic_module = None
+    _ANTHROPIC_AVAILABLE = False
 
 from sources import RSS_FEEDS
 
@@ -116,6 +125,76 @@ def clean_text(raw: str, stop_words: set) -> str:
 
 # ── STEP 3: NER ──────────────────────────────────────────────────────────────
 
+# Matches residual HTML attribute fragments that slip through BeautifulSoup
+# when markup is malformed — e.g. href="https://therecursive.com" appearing
+# verbatim in the text and being tagged as an ORG entity by spaCy.
+_HTML_ATTR_RE = re.compile(r'\w[\w-]*\s*=\s*(?:"[^"]*"|\'[^\']*\')', re.IGNORECASE)
+# URL pattern for NER pre-cleaning (separate from URL_RE — this one preserves
+# case because NER needs original casing to work correctly).
+_URL_NER_RE = re.compile(r"https?://\S+|www\.\S+")
+
+# Entities to drop under any spaCy label — web UI boilerplate and navigation
+# text that appears verbatim in RSS summaries or leaks from HTML fragments.
+_NER_BLOCKLIST_ALL: frozenset = frozenset({
+    "download", "subscribe", "click", "read", "share", "follow",
+    "newsletter", "continue", "cookie", "cookies", "sign up", "log in",
+    "login", "sign in", "more", "next", "previous", "home", "search",
+    "menu", "close", "open", "back", "comments", "reply", "like",
+    "save", "print", "learn more", "see more", "view more",
+    "load more", "read more", "show more",
+})
+
+# AI product / browser names that spaCy routinely misclassifies as PERSON.
+# Blocked only from the PERSON label — they can still surface as ORG or PRODUCT.
+_NER_BLOCKLIST_PERSON: frozenset = frozenset({
+    "claude", "gpt", "gpt-4", "gpt-4o", "copilot", "gemini",
+    "chatgpt", "dall-e", "dall·e", "midjourney", "llama", "mistral",
+    "sora", "bard", "chrome", "firefox", "safari", "edge", "opera",
+})
+
+
+def _clean_for_ner(raw: str) -> str:
+    """
+    Prepare text for spaCy NER.
+
+    Strips HTML tags, URLs, and attribute fragments while preserving case
+    and punctuation — both are required for accurate entity recognition.
+    BeautifulSoup handles well-formed markup; the extra regex pass removes
+    attribute strings (href="...", src="...") that survive in malformed HTML.
+    """
+    text = BeautifulSoup(raw, "html.parser").get_text(separator=" ")
+    text = _URL_NER_RE.sub(" ", text)
+    text = _HTML_ATTR_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# Short abbreviations that are meaningful signals and must survive the < 3
+# character length filter (geopolitical bodies, financial regulators, alliances).
+_NER_SHORT_ALLOWLIST: frozenset = frozenset({
+    "eu", "us", "uk", "un", "nato", "who", "imf", "sec", "uae", "gcc",
+})
+
+
+def _is_blocked_entity(name: str, label: str) -> bool:
+    """
+    Return True if this entity should be filtered before counting.
+
+    Checks in order:
+      1. Fewer than 3 characters — too short to be meaningful,
+         unless the name is in _NER_SHORT_ALLOWLIST
+      2. Name is in the all-labels blocklist (web UI / navigation noise)
+      3. Label is PERSON and name is a known AI product or browser name
+    """
+    lower = name.lower()
+    if len(name) < 3 and lower not in _NER_SHORT_ALLOWLIST:
+        return True
+    if lower in _NER_BLOCKLIST_ALL:
+        return True
+    if label == "PERSON" and lower in _NER_BLOCKLIST_PERSON:
+        return True
+    return False
+
+
 ENTITY_TYPES = {"ORG", "PERSON", "GPE", "LAW", "PRODUCT", "EVENT"}
 
 def run_ner(articles, nlp):
@@ -125,16 +204,21 @@ def run_ner(articles, nlp):
     entity_sources = {etype: defaultdict(Counter) for etype in ENTITY_TYPES}
 
     for art in articles:
-        doc = nlp(art["text"][:100_000])  # spaCy token limit guard
+        # Strip HTML/URLs/attributes before NER so spaCy never sees raw markup.
+        # clean_text() (used for BERTopic) also strips HTML but lowercases first,
+        # which destroys the casing spaCy needs for entity recognition.
+        ner_text = _clean_for_ner(art["text"])[:100_000]
+        doc = nlp(ner_text)
         entities = []
         for ent in doc.ents:
-            if ent.label_ in ENTITY_TYPES:
-                name = ent.text.strip()
-                if len(name) < 2:
-                    continue
-                entities.append({"text": name, "label": ent.label_})
-                entity_counts[ent.label_][name] += 1
-                entity_sources[ent.label_][name][art["category"]] += 1
+            if ent.label_ not in ENTITY_TYPES:
+                continue
+            name = ent.text.strip()
+            if _is_blocked_entity(name, ent.label_):
+                continue
+            entities.append({"text": name, "label": ent.label_})
+            entity_counts[ent.label_][name] += 1
+            entity_sources[ent.label_][name][art["category"]] += 1
         art["entities"] = entities
 
     print("[NER] done")
@@ -150,6 +234,47 @@ def top_entities_with_source(counter, source_map, n):
 
 
 # ── STEP 4: BERTopic ─────────────────────────────────────────────────────────
+
+def _name_topic_with_llm(keywords: list) -> str:
+    """
+    Ask claude-haiku-4-5 to return a clean 2-3 word label for a BERTopic cluster.
+    Falls back to joining the top-2 keywords (title-cased) on any error or if
+    the anthropic package / ANTHROPIC_API_KEY is not available.
+    """
+    fallback = " ".join(keywords[:2]).title()
+
+    if not _ANTHROPIC_AVAILABLE:
+        return fallback
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return fallback
+
+    kw_str = ", ".join(keywords[:5])
+    try:
+        client = _anthropic_module.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=16,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "You label topic clusters for a Microsoft tech intelligence newsletter.\n"
+                    f"BERTopic keywords: {kw_str}\n"
+                    "Return a clean 2-3 word label for a Microsoft tech audience. "
+                    "Examples: 'AI Policy', 'Azure Infrastructure', 'European Regulation', "
+                    "'Cybersecurity Threats', 'Cloud Computing'.\n"
+                    "Reply with ONLY the label — no explanation, no trailing punctuation."
+                ),
+            }],
+        )
+        label = message.content[0].text.strip().strip(".")
+        if label and len(label.split()) <= 5:
+            return label
+        return fallback
+    except Exception as exc:
+        print(f"[BERTopic] LLM naming failed ({exc!r}) — using keyword fallback")
+        return fallback
+
 
 def run_bertopic(articles):
     texts = [a["cleaned_text"] for a in articles]
@@ -192,8 +317,10 @@ def run_bertopic(articles):
             for cat, c in cat_counter.most_common()
         )
 
+        label = _name_topic_with_llm(keywords)
         topic_results.append({
             "topic_id": tid,
+            "label": label,
             "keywords": keywords,
             "article_count": count,
             "dominant_categories": dominant,
@@ -283,10 +410,11 @@ def generate_report(articles, entity_counts, entity_sources, topic_results, over
     # ── topic clusters ────────────────────────────────────────────────────────
     lines.append("\n## Discovered Topic Clusters (BERTopic)")
     lines.append(_md_table(
-        ["Topic ID", "Top Keywords", "Article Count", "Dominant Categories"],
+        ["Topic ID", "Label", "Top Keywords", "Article Count", "Dominant Categories"],
         [
             [
                 tr["topic_id"],
+                tr["label"],
                 ", ".join(tr["keywords"]),
                 tr["article_count"],
                 tr["dominant_categories"],
@@ -316,9 +444,7 @@ def generate_report(articles, entity_counts, entity_sources, topic_results, over
     # Derive a short candidate name from top 2 keywords
     candidates = []
     for tr in qualified:
-        kws = tr["keywords"][:2]
-        name = " ".join(kws).title()
-        candidates.append((name, tr["article_count"], len(tr["cat_counter"])))
+        candidates.append((tr["label"], tr["article_count"], len(tr["cat_counter"])))
 
     # Deduplicate by name, keep highest article count
     seen = {}
@@ -413,5 +539,99 @@ def main():
     print("Done.")
 
 
+def _run_ner_sample_test():
+    """
+    Sanity-check the NER pre-cleaning and entity filter against inputs that
+    produced garbage in the previous tag_discovery_report.md.
+    Run with: python tag_discovery.py --test-ner
+    """
+    try:
+        nlp = spacy.load("en_core_web_sm")
+    except OSError:
+        print("[test-ner] ERROR: en_core_web_sm not installed.")
+        print("  Run: python -m spacy download en_core_web_sm")
+        return
+
+    SAMPLES = [
+        # Raw HTML with href attribute — was producing the ORG entity
+        # 'href="https://therecursive.com' in the previous run.
+        (
+            "regional",
+            'CEE Tech Roundup <a href="https://therecursive.com/cee-roundup">Read more</a>. '
+            "OpenAI and Google announced new models. Download the app now. "
+            "Claude scored highest on the benchmark.",
+        ),
+        # AI assistant names misclassified as PERSON; web UI verbs.
+        (
+            "tech",
+            "Microsoft Copilot and Claude from Anthropic both support GPT-4o. "
+            "Sam Altman and Satya Nadella spoke at the summit. "
+            "Subscribe to follow our newsletter. Share this article.",
+        ),
+        # Short entities (EU, US) and navigation words.
+        (
+            "regulation",
+            "EU AI Act passed. US and UK lawmakers met in DC. "
+            "Click here to read the full text. The GDPR applies across Europe.",
+        ),
+    ]
+
+    print("\n" + "=" * 60)
+    print("NER SAMPLE TEST")
+    print("=" * 60)
+    for category, raw_text in SAMPLES:
+        cleaned = _clean_for_ner(raw_text)
+        print(f"\nInput:   {raw_text}")
+        print(f"Cleaned: {cleaned}")
+        doc = nlp(cleaned)
+        kept, blocked = [], []
+        for ent in doc.ents:
+            if ent.label_ not in ENTITY_TYPES:
+                continue
+            name = ent.text.strip()
+            if _is_blocked_entity(name, ent.label_):
+                blocked.append(f"{name!r} [{ent.label_}]")
+            else:
+                kept.append(f"{name!r} [{ent.label_}]")
+        print(f"  KEPT:    {kept if kept else ['(none)']}")
+        print(f"  BLOCKED: {blocked if blocked else ['(none)']}")
+    print()
+
+
+def _run_topic_naming_test():
+    """
+    Sanity-check _name_topic_with_llm against sample BERTopic keyword sets.
+    Run with: python tag_discovery.py --test-topics
+    """
+    SAMPLE_CLUSTERS = [
+        ["china", "trade", "tariff", "import", "export"],
+        ["regulation", "eu", "ai", "act", "compliance"],
+        ["azure", "cloud", "microsoft", "infrastructure", "service"],
+        ["security", "breach", "data", "attack", "vulnerability"],
+        ["musk", "elon", "twitter", "tesla", "spacex"],
+        ["gpu", "nvidia", "chip", "compute", "semiconductor"],
+        ["copilot", "openai", "model", "language", "generative"],
+    ]
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    mode = "LLM (claude-haiku-4-5)" if (_ANTHROPIC_AVAILABLE and api_key) else "keyword fallback"
+
+    print("\n" + "=" * 60)
+    print(f"TOPIC NAMING TEST  [{mode}]")
+    print("=" * 60)
+    for kws in SAMPLE_CLUSTERS:
+        fallback = " ".join(kws[:2]).title()
+        label = _name_topic_with_llm(kws)
+        flag = "" if label != fallback else "  [fallback]"
+        print(f"  keywords : {', '.join(kws)}")
+        print(f"  label    : {label}{flag}")
+        print()
+
+
 if __name__ == "__main__":
-    main()
+    if "--test-ner" in sys.argv:
+        _run_ner_sample_test()
+    elif "--test-topics" in sys.argv:
+        _run_topic_naming_test()
+    else:
+        main()

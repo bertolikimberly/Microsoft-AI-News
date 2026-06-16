@@ -105,8 +105,12 @@ def fetch_new_articles():
 
     for feed_meta in RSS_FEEDS:
         src_id = feed_meta["id"]
+        if not feed_meta.get("enabled", True):
+            print(f"[{src_id}] disabled — skipping")
+            continue
         url = feed_meta["url"]
         category = feed_meta["category"]
+        tier = feed_meta.get("tier", "primary")
         last_fetched_at = state.get(src_id)
         last_dt = _parse_iso(last_fetched_at)
         last_display = last_fetched_at or "never"
@@ -143,6 +147,7 @@ def fetch_new_articles():
                 "summary": _extract_summary(entry),
                 "source_id": src_id,
                 "category": category,
+                "tier": tier,
                 "pub_date": pub_dt.isoformat(),
                 "fetched_at": _now_iso(),
             })
