@@ -240,12 +240,15 @@ def chat_reply(
     except ImportError as exc:
         raise RuntimeError(f"chat pipeline unavailable: {exc}") from exc
 
-    chatbot = Chatbot(vector_store=ArticleVectorStore())
-
     profile = user_to_profile(user, prefs)
     chat_history = [ChatMessage(role=r, content=c) for r, c in history]
 
-    response = chatbot.chat(query=query, user=profile, history=chat_history)
+    try:
+        chatbot = Chatbot(vector_store=ArticleVectorStore())
+        response = chatbot.chat(query=query, user=profile, history=chat_history)
+    except Exception as exc:
+        log.exception("chat pipeline failed during chat()")
+        raise RuntimeError(f"chat pipeline failed: {exc}") from exc
 
     # Map pipeline source articles back to our ArticleORM rows by URL so
     # citations carry our internal `article_id`s (frontend deep-link target).
