@@ -6,24 +6,94 @@ import Sidebar from '@/components/layout/Sidebar'
 import Message from '@/components/chat/Message'
 import Composer from '@/components/chat/Composer'
 import BriefingPreview from '@/components/chat/BriefingPreview'
+import DashboardView from '@/components/dashboard/DashboardView'
 import Toast from '@/components/ui/Toast'
-import ShareModal from '@/components/ui/ShareModal'
 import AuthGate from '@/components/auth/AuthGate'
 import PrefsDeck from '@/components/preferences/PrefsDeck'
-import FolderSettings from '@/components/folders/FolderSettings'
 import SavedView from '@/components/saved/SavedView'
-import Forum from '@/components/forum/Forum'
 import { TweaksPanel, TweakSection, TweakSelect, TweakSlider, TweakToggle, TweakText } from '@/components/ui/TweaksPanel'
 import { PALETTES } from '@/constants/palettes'
 import { FONTS, NEWS_FONTS } from '@/constants/fonts'
-import { BENCHMARK_CARDS, NEWS_BY_TOPIC, SUGGESTIONS, TOPIC_SUGGESTIONS, TWEAKS_DEFAULTS } from '@/constants/data'
-import { readSession, writeSession } from '@/lib/session'
+import { BENCHMARK_CARDS, NEWS_BY_TOPIC, TOPIC_SUGGESTIONS, TWEAKS_DEFAULTS } from '@/constants/data'
+import { readSession, writeSession, apiUserToLocal } from '@/lib/session'
+import { getToken, setToken, getMe, createSession, deleteSession, streamMessage, listSessions, getPreferences, getSession, getSaved, saveArticle, unsaveArticle, getFolders, createFolder, deleteFolder, createFolderThread, deleteFolderThread, type SseCitation, type ApiArticle, type ApiFolder } from '@/lib/api'
 import { useTweaks } from '@/hooks/useTweaks'
-import type { ChatMessage, ForumPost, NewsCard, NewsFolder, Prefs, Thread, User } from '@/types'
+import type { ChatMessage, NewsCard, NewsFolder, Prefs, Thread, User } from '@/types'
 
-declare global {
-  interface Window {
-    claude?: { complete: (opts: { messages: { role: string; content: string }[] }) => Promise<string> }
+const FALLBACK_PROMPTS = [
+  "What are the biggest AI breakthroughs this week?",
+  "Which tech companies made headlines today?",
+  "Catch me up on the latest in cloud infrastructure.",
+  "What should I know about AI regulation right now?",
+]
+
+function NewChatScreen({ palette, displayFont, prefs, user, onAsk }: {
+  palette: import('@/types').Palette
+  displayFont: string
+  prefs: Prefs
+  user: User
+  onAsk: (q: string) => void
+}) {
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const firstName = user.name?.split(' ')[0] || 'there'
+
+  const topicQuestions = (prefs.topics ?? [])
+    .slice(0, 3)
+    .map((t) => TOPIC_SUGGESTIONS[t]?.prompt)
+    .filter(Boolean) as string[]
+
+  const prompts = [
+    ...topicQuestions,
+    ...FALLBACK_PROMPTS,
+  ]
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .slice(0, 4)
+
+  return (
+    <div className="newchat-wrap">
+      <h2 className="newchat-greeting" style={{ fontFamily: FONTS[displayFont], color: palette.ink }}>
+        {greeting}, {firstName}.
+      </h2>
+      <p className="newchat-sub" style={{ color: palette.muted }}>Here's what's making news today. Ask me anything.</p>
+      <ul className="newchat-prompts">
+        {prompts.map((q) => (
+          <li key={q}>
+            <button className="newchat-prompt" onClick={() => onAsk(q)}
+              style={{ color: palette.ink, background: 'rgba(255,253,247,0.38)', borderColor: 'rgba(0,0,0,0.07)', fontFamily: FONTS[displayFont] }}>
+              <span className="newchat-prompt-text">{q}</span>
+              <span className="newchat-prompt-arrow" style={{ color: palette.muted }}>→</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function _apiArticleToCard(a: ApiArticle): NewsCard {
+  return {
+    id: a.id,
+    title: a.title,
+    source: a.source,
+    time: a.published_at
+      ? new Date(a.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '',
+    kind: 'article',
+    blurb: a.extract ?? '',
+    tone: 'calm',
+    tag: a.source,
+  }
+}
+
+function _apiFolderToLocal(f: ApiFolder): NewsFolder {
+  return {
+    id: f.id,
+    name: f.name,
+    topics: f.topics,
+    frequency: (f.frequency as NewsFolder['frequency']) || 'daily',
+    keywords: f.keywords,
+    threads: f.threads.map((t) => ({ id: t.id, title: t.title ?? 'Untitled', time: t.time })),
   }
 }
 
@@ -49,60 +119,72 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [prefs, setPrefs] = useState<Prefs>({
-    role: 'engineer', region: 'eu', topics: ['ai_ml', 'cloud', 'cyber'],
+    role: 'engineer', region: 'eu', topics: [],
     depth: 'deep', delivery: ['daily'], keywords: '', tone: 'calm', energy: 35,
   })
-  const [folders, setFolders] = useState<NewsFolder[]>([
-    { id: 'f1', name: 'AI & Machine Learning', topics: ['ai_ml', 'hardware'], frequency: 'daily', keywords: [], threads: [
-      { id: 'th1', title: 'Latest LLM benchmarks', time: 'Now' },
-    ]},
-    { id: 'f2', name: 'Cybersecurity', topics: ['cyber', 'privacy'], frequency: 'daily', keywords: [], threads: [] },
-    { id: 'f3', name: 'Business & Markets', topics: ['ma', 'bigtech'], frequency: 'weekly', keywords: [], threads: [] },
-  ])
+  const [folders, setFolders] = useState<NewsFolder[]>([])
 
-  const updateFolder = (updated: NewsFolder) =>
-    setFolders((fs) => fs.map((f) => f.id === updated.id ? { ...f, ...updated } : f))
-
-  const [folderSettingsTarget, setFolderSettingsTarget] = useState<NewsFolder | null>(null)
-  const [currentView, setCurrentView] = useState<'chat' | 'saved' | 'forum'>('chat')
+  const [currentView, setCurrentView] = useState<'dashboard' | 'chat' | 'saved'>('dashboard')
   const [savedArticleIds, setSavedArticleIds] = useState<Set<string>>(new Set())
   const [savedArticles, setSavedArticles] = useState<NewsCard[]>([])
-  const [forumPosts, setForumPosts] = useState<ForumPost[]>([
-    { id: 'fp0', authorName: 'Sarah K.', title: 'How are you using AI tools in your daily workflow?', content: 'I\'ve been experimenting with Claude for summarising long reports. Would love to hear how others are integrating AI into their work.', status: 'approved', createdAt: '31 May 2026', likes: 4, likedByMe: false },
-  ])
 
-  const toggleSave = (card: NewsCard) => {
+  const toggleSave = async (card: NewsCard) => {
+    const isSaved = savedArticleIds.has(card.id)
+    // Optimistic update
     setSavedArticleIds((ids) => {
       const next = new Set(ids)
-      if (next.has(card.id)) {
-        next.delete(card.id)
-        setSavedArticles((as) => as.filter((a) => a.id !== card.id))
-        setToast('Removed from saved.')
-      } else {
-        next.add(card.id)
-        setSavedArticles((as) => [card, ...as.filter((a) => a.id !== card.id)])
-        setToast('Article saved.')
-      }
+      isSaved ? next.delete(card.id) : next.add(card.id)
       return next
     })
+    setSavedArticles((as) =>
+      isSaved ? as.filter((a) => a.id !== card.id) : [card, ...as.filter((a) => a.id !== card.id)]
+    )
+    setToast(isSaved ? 'Removed from saved.' : 'Article saved.')
+
+    if (getToken()) {
+      try {
+        if (isSaved) {
+          await unsaveArticle(card.id)
+        } else {
+          await saveArticle(card.id)
+        }
+      } catch {
+        // Roll back optimistic update on failure
+        setSavedArticleIds((ids) => {
+          const next = new Set(ids)
+          isSaved ? next.add(card.id) : next.delete(card.id)
+          return next
+        })
+        setSavedArticles((as) =>
+          isSaved ? [card, ...as.filter((a) => a.id !== card.id)] : as.filter((a) => a.id !== card.id)
+        )
+        setToast('Could not save — try again.')
+      }
+    }
   }
-  const [activeFolderId, setActiveFolderId] = useState<string | null>('f1')
-  const [activeThreadId, setActiveThreadId] = useState('th1')
+
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
+  const [activeThreadId, setActiveThreadId] = useState('')
   const [generalThreads, setGeneralThreads] = useState<Thread[]>([])
+  const sessionMap = useRef<Map<string, string>>(new Map())
+  // When true, next send() will always start a fresh general session regardless of current state
+  const freshChatRef = useRef(false)
 
   const addGeneralThread = () => {
-    const id = 'g' + Date.now()
-    setGeneralThreads((ts) => [{ id, title: 'New chat', time: 'Now' }, ...ts])
+    // Don't create a session or add to Recents yet — wait for the first message
     setActiveFolderId(null)
-    setActiveThreadId(id)
+    setActiveThreadId('')
     setMessages([])
   }
 
-  const deleteGeneralThread = (threadId: string) =>
+  const deleteGeneralThread = async (threadId: string) => {
     setGeneralThreads((ts) => ts.filter((t) => t.id !== threadId))
-
-  const pinGeneralThread = (threadId: string) =>
-    setGeneralThreads((ts) => ts.map((t) => t.id === threadId ? { ...t, pinned: !t.pinned } : t))
+    const sessionId = sessionMap.current.get(threadId)
+    if (sessionId) {
+      sessionMap.current.delete(threadId)
+      await deleteSession(sessionId).catch(() => {/* best-effort */})
+    }
+  }
 
   const buildFolderBriefing = (folder: NewsFolder): ChatMessage[] => {
     const now = new Date()
@@ -125,7 +207,7 @@ export default function App() {
           return (bHit ? 1 : 0) - (aHit ? 1 : 0)
         })
       : allCards
-    ).slice(0, 4)
+    ).slice(0, 3)
     const followups = folder.topics
       .map((t) => TOPIC_SUGGESTIONS[t]?.prompt)
       .filter(Boolean)
@@ -144,41 +226,120 @@ export default function App() {
     }]
   }
 
-  const addThread = (folderId: string) => {
-    const id = 'th' + Date.now()
+  const addThread = async (folderId: string) => {
     const folder = folders.find((f) => f.id === folderId)
     const briefing = folder ? buildFolderBriefing(folder) : []
     const firstTitle = folder?.topics[0]
       ? (briefing[0]?.cards?.[0]?.title?.slice(0, 40) ?? 'New conversation')
       : 'New conversation'
-    setFolders((fs) => fs.map((f) => f.id === folderId
-      ? { ...f, threads: [{ id, title: firstTitle, time: 'Now' }, ...f.threads] }
-      : f
-    ))
-    setActiveFolderId(folderId)
-    setActiveThreadId(id)
     setMessages(briefing)
+    if (getToken()) {
+      try {
+        const thread = await createFolderThread(folderId, firstTitle)
+        sessionMap.current.set(thread.id, thread.id)
+        setFolders((fs) => fs.map((f) => f.id === folderId
+          ? { ...f, threads: [{ id: thread.id, title: thread.title ?? firstTitle, time: thread.time }, ...f.threads] }
+          : f
+        ))
+        setActiveFolderId(folderId)
+        setActiveThreadId(thread.id)
+      } catch {
+        const id = 'th' + Date.now()
+        setFolders((fs) => fs.map((f) => f.id === folderId
+          ? { ...f, threads: [{ id, title: firstTitle, time: 'Now' }, ...f.threads] }
+          : f
+        ))
+        setActiveFolderId(folderId)
+        setActiveThreadId(id)
+      }
+    } else {
+      const id = 'th' + Date.now()
+      setFolders((fs) => fs.map((f) => f.id === folderId
+        ? { ...f, threads: [{ id, title: firstTitle, time: 'Now' }, ...f.threads] }
+        : f
+      ))
+      setActiveFolderId(folderId)
+      setActiveThreadId(id)
+    }
   }
 
-  const deleteThread = (folderId: string, threadId: string) =>
+  const deleteThread = async (folderId: string, threadId: string) => {
     setFolders((fs) => fs.map((f) => f.id === folderId
       ? { ...f, threads: f.threads.filter((t) => t.id !== threadId) }
       : f
     ))
+    sessionMap.current.delete(threadId)
+    if (getToken()) {
+      await deleteFolderThread(folderId, threadId).catch(() => {})
+    }
+  }
 
-  const pinThread = (folderId: string, threadId: string) =>
-    setFolders((fs) => fs.map((f) => f.id === folderId
-      ? { ...f, threads: f.threads.map((t) => t.id === threadId ? { ...t, pinned: !t.pinned } : t) }
-      : f
-    ))
   const [messages, setMessages] = useState<ChatMessage[]>(() => tw.preloadDemo ? buildBenchmarkConvo() : [])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
-  const [shareOpen, setShareOpen] = useState(false)
   const scrollRef = useRef<HTMLElement>(null)
 
-  useEffect(() => { setUser(readSession()) }, [])
+  useEffect(() => {
+    // Magic-link verify redirects back as: {frontend_url}/#access_token=<jwt>
+    const hash = window.location.hash
+    if (hash.includes('access_token=')) {
+      const token = new URLSearchParams(hash.slice(1)).get('access_token')
+      if (token) {
+        setToken(token)
+        window.history.replaceState(null, '', window.location.pathname)
+        getMe()
+          .then((apiUser) => {
+            const u = apiUserToLocal(apiUser)
+            writeSession(u)
+            setUser(u)
+          })
+          .catch(() => {
+            setToken(null)
+            setUser(readSession())
+          })
+        return
+      }
+    }
+    setUser(readSession())
+  }, [])
+
+  useEffect(() => {
+    if (!user || !getToken()) return
+
+    getPreferences().then((p) => {
+      setPrefs((curr) => ({
+        ...curr,
+        topics: p.topics.length > 0 ? p.topics : curr.topics,
+        region: p.regions[0] ?? curr.region,
+        role: p.role ?? curr.role,
+        depth: p.length ?? curr.depth,
+        delivery: [p.frequency],
+        tone: p.tone ?? curr.tone,
+      }))
+    }).catch(() => {})
+
+    Promise.all([listSessions(), getFolders()]).then(([sessions, apiFolders]) => {
+      const local = apiFolders.map(_apiFolderToLocal)
+      setFolders(local)
+      local.forEach((f) => f.threads.forEach((t) => sessionMap.current.set(t.id, t.id)))
+
+      const folderSessionIds = new Set(local.flatMap((f) => f.threads.map((t) => t.id)))
+      const generalOnly = sessions.filter((s) => !folderSessionIds.has(s.id))
+      setGeneralThreads(generalOnly.map((s) => ({
+        id: s.id,
+        title: s.title ?? 'Untitled chat',
+        time: new Date(s.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      })))
+      generalOnly.forEach((s) => sessionMap.current.set(s.id, s.id))
+    }).catch(() => {})
+
+    getSaved().then((articles) => {
+      const cards = articles.map(_apiArticleToCard)
+      setSavedArticles(cards)
+      setSavedArticleIds(new Set(cards.map((c) => c.id)))
+    }).catch(() => {})
+  }, [user])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -186,49 +347,127 @@ export default function App() {
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
+  const handleSelectThread = async (folderId: string | null, threadId: string) => {
+    setActiveFolderId(folderId)
+    setActiveThreadId(threadId)
+    setMessages([])
+    const sessionId = sessionMap.current.get(threadId)
+    if (sessionId && getToken()) {
+      try {
+        const sess = await getSession(sessionId)
+        if (sess.messages.length > 0) {
+          setMessages(sess.messages.map((m, i) => ({
+            id: i + 1,
+            role: m.role === 'assistant' ? 'ai' as const : 'user' as const,
+            content: m.content,
+            cards: m.citations.length > 0
+              ? m.citations.slice(0, 3).map((c, j) => ({
+                  id: c.article_id,
+                  source: c.source,
+                  time: c.published_at
+                    ? new Date(c.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : '',
+                  kind: 'article',
+                  title: c.title,
+                  blurb: '',
+                  tone: j === 0 ? 'lead' as const : 'calm' as const,
+                  tag: c.source,
+                }))
+              : undefined,
+          })))
+        }
+      } catch { /* stay empty on failure */ }
+    }
+  }
+
   const send = async (overrideText?: string) => {
     const text = (overrideText ?? input).trim()
     if (!text || busy) return
+    setCurrentView('chat')
     setInput('')
     const userMsg: ChatMessage = { id: Date.now(), role: 'user', content: text }
     const thinkingId = Date.now() + 1
     setMessages((m) => [...m, userMsg, { id: thinkingId, role: 'ai', thinking: true }])
     setBusy(true)
 
-
-    try {
-      const reply = await window.claude?.complete({
-        messages: [{
-          role: 'user',
-          content: `You are MAI news — a calm, editorial AI-news companion. You ONLY discuss artificial intelligence: models, benchmarks, research papers, releases, policy, infrastructure, the people and companies behind it.
-
-Voice: thoughtful, literary, unhurried. Lowercase is fine. No emoji. No bullet lists unless explicitly asked. Keep replies to 2–4 short paragraphs. Begin without preamble.
-
-User: ${text}`,
-        }],
-      }) ?? "i'm having trouble reaching my thoughts right now. try again in a moment."
-      setMessages((m) => m.map((msg) => msg.id === thinkingId ? { id: thinkingId, role: 'ai', content: reply } : msg))
-    } catch {
-      setMessages((m) => m.map((msg) => msg.id === thinkingId ? { id: thinkingId, role: 'ai', content: "i'm having trouble reaching my thoughts right now. try again in a moment." } : msg))
-    } finally {
+    const token = getToken()
+    if (!token) {
+      setMessages((m) => m.map((msg) => msg.id === thinkingId
+        ? { id: thinkingId, role: 'ai', content: "i'm not connected to the server right now. try signing in again." }
+        : msg))
       setBusy(false)
+      return
     }
-  }
 
-  const openFolders = () => setPrefsOpen(true)
+    const isFresh = freshChatRef.current
+    freshChatRef.current = false
+    const effectiveFolderId = isFresh ? null : activeFolderId
+    let sessionId = isFresh ? undefined : sessionMap.current.get(activeThreadId)
+    if (!sessionId) {
+      try {
+        const session = await createSession(text.slice(0, 80))
+        sessionId = session.id
+        sessionMap.current.set(session.id, session.id)
+        // First message in a general chat: register in Recents now
+        if (effectiveFolderId === null) {
+          setGeneralThreads((ts) => [
+            { id: session.id, title: text.slice(0, 60), time: 'Now' },
+            ...ts,
+          ])
+          setActiveFolderId(null)
+          setActiveThreadId(session.id)
+        }
+      } catch {
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: "couldn't create a session. please try again." }
+          : msg))
+        setBusy(false)
+        return
+      }
+    }
+
+    let streamedText = ''
+    const citations: SseCitation[] = []
+
+    await streamMessage(sessionId, text, {
+      onToken: (chunk) => {
+        streamedText += chunk
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText, thinking: false }
+          : msg))
+      },
+      onCitation: (c) => { citations.push(c) },
+      onDone: () => {
+        const sliced = citations.slice(0, 3)
+        const cards: NewsCard[] | undefined = sliced.length > 0
+          ? sliced.map((c, i) => ({
+              id: c.article_id,
+              source: c.source,
+              time: new Date(c.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              kind: 'article',
+              title: c.title,
+              blurb: '',
+              tone: (i === 0 && sliced.length !== 2) ? 'lead' as const : 'calm' as const,
+              tag: c.source,
+            }))
+          : undefined
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText, thinking: false, cards }
+          : msg))
+        setBusy(false)
+      },
+      onError: () => {
+        setMessages((m) => m.map((msg) => msg.id === thinkingId
+          ? { id: thinkingId, role: 'ai', content: streamedText || "i'm having trouble reaching my thoughts right now. try again in a moment." }
+          : msg))
+        setBusy(false)
+      },
+    })
+  }
 
   const handleAction = (kind: string, card: NewsCard) => {
     if (kind === 'read') setToast(`Opening ${card.source}…`)
     if (kind === 'more') setToast(`Pulling threads on "${card.tag}"…`)
-  }
-  const handleActionChip = (a: { id: string; label: string }) => {
-    const map: Record<string, string> = {
-      report: 'Drafting a one-page report from these stories…',
-      compare: 'Building a side-by-side comparison…',
-      explore: 'Surfacing related papers and releases…',
-      save: 'Saved to your library.',
-    }
-    setToast(map[a.id] || a.label)
   }
 
   const tweakControls = (
@@ -284,77 +523,91 @@ User: ${text}`,
         palette={palette} displayFont={tw.displayFont} newsFont={tw.newsFont}
         folders={folders} activeFolderId={activeFolderId} activeThreadId={activeThreadId}
         generalThreads={generalThreads}
-        onSelectThread={(folderId, threadId) => { setActiveFolderId(folderId); setActiveThreadId(threadId); setMessages([]) }}
+        currentView={currentView} onSetView={(v) => {
+          setCurrentView(v)
+          if (v === 'chat') { setActiveFolderId(null); setActiveThreadId(''); setMessages([]) }
+        }}
+        onSelectThread={(fId, tId) => { setCurrentView('chat'); handleSelectThread(fId, tId) }}
         onNewThread={addThread}
         onDeleteThread={deleteThread}
-        onPinThread={pinThread}
-        onNewChat={addGeneralThread}
+        onNewChat={() => { setCurrentView('chat'); addGeneralThread() }}
         onDeleteGeneralThread={deleteGeneralThread}
-        onPinGeneralThread={pinGeneralThread}
-        onOpenFolders={openFolders}
-        onOpenFolderSettings={(f) => setFolderSettingsTarget(f)}
-        onDeleteFolder={(id) => setFolders((fs) => fs.filter((f) => f.id !== id))}
-        currentView={currentView}
-        onNavigate={(v) => setCurrentView(v)}
-        savedCount={savedArticles.length}
+        onAddFolder={async (name) => {
+            if (getToken()) {
+              try {
+                const apiFolder = await createFolder({ name })
+                setFolders((fs) => [...fs, _apiFolderToLocal(apiFolder)])
+                setToast(`Folder "${apiFolder.name}" created.`)
+              } catch {
+                setToast('Could not create folder — try again.')
+              }
+            } else {
+              const local: NewsFolder = { id: 'f' + Date.now(), name, topics: [], frequency: 'daily', keywords: [], threads: [] }
+              setFolders((fs) => [...fs, local])
+              setToast(`Folder "${name}" created.`)
+            }
+          }}
+        onDeleteFolder={async (id) => {
+            setFolders((fs) => fs.filter((f) => f.id !== id))
+            if (getToken()) deleteFolder(id).catch(() => {})
+          }}
         user={user}
-        onLogout={() => { writeSession(null); setUser(null) }}
+        onLogout={() => { writeSession(null); setToken(null); sessionMap.current.clear(); setUser(null) }}
       />
 
       <main className="main">
         <header className="topbar">
           <div className="crumb" style={{ color: palette.muted }}>
-            <span className="crumb-title" style={{ color: palette.ink }}>
-              {activeFolderId === null
-                ? (generalThreads.find((t) => t.id === activeThreadId)?.title || 'New chat')
-                : (folders.find((f) => f.id === activeFolderId)?.name || 'Folder')}
-            </span>
+            {currentView === 'dashboard' ? (
+              <span className="crumb-title" style={{ color: palette.ink }}>Dashboard</span>
+            ) : currentView === 'saved' ? (
+              <span className="crumb-title" style={{ color: palette.ink }}>Saved</span>
+            ) : activeFolderId !== null ? (
+              <span className="crumb-title" style={{ color: palette.ink }}>
+                {folders.find((f) => f.id === activeFolderId)?.name || 'Folder'}
+              </span>
+            ) : activeThreadId && generalThreads.find((t) => t.id === activeThreadId) ? (
+              <span className="crumb-title" style={{ color: palette.ink }}>
+                {generalThreads.find((t) => t.id === activeThreadId)?.title}
+              </span>
+            ) : (
+              <button className="crumb-title crumb-new-btn" style={{ color: palette.ink }}
+                onClick={() => { setCurrentView('chat'); addGeneralThread() }}>
+                New chat
+              </button>
+            )}
           </div>
           <div className="topbar-right" style={{ color: palette.muted }}>
-            <button className="ghost-btn prefs-btn" onClick={() => setPrefsOpen(true)}
-              style={{ color: palette.ink, borderColor: 'rgba(0,0,0,0.18)', background: 'rgba(255,253,247,0.7)' }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <button className="ghost-btn prefs-btn icon-btn" onClick={() => setPrefsOpen(true)}
+              style={{ color: palette.ink, borderColor: 'rgba(0,0,0,0.18)', background: 'rgba(255,253,247,0.7)' }}
+              aria-label="Preferences">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
-              Preferences
             </button>
-            <div style={{ position: 'relative' }}>
-              <button className="ghost-btn" onClick={() => setShareOpen((v) => !v)}>Share</button>
-              <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} palette={palette}
-                title={activeFolderId === null
-                  ? (generalThreads.find((t) => t.id === activeThreadId)?.title || 'New chat')
-                  : (folders.find((f) => f.id === activeFolderId)?.name || 'Folder')}
-                messages={messages} />
-            </div>
           </div>
         </header>
 
         <section className="canvas" ref={scrollRef}>
-          {currentView === 'saved' ? (
+          {currentView === 'dashboard' ? (
+            <DashboardView palette={palette} displayFont={tw.displayFont}
+              userTopics={prefs.topics}
+              onAsk={(q) => { freshChatRef.current = true; setMessages([]); send(q) }} />
+          ) : currentView === 'saved' ? (
             <SavedView palette={palette} displayFont={tw.displayFont}
               savedArticles={savedArticles} savedIds={savedArticleIds}
               onToggleSave={toggleSave} onAction={handleAction} />
-          ) : currentView === 'forum' ? (
-            <Forum palette={palette} displayFont={tw.displayFont}
-              posts={forumPosts} user={user!}
-              onAddPost={(p) => { setForumPosts((ps) => [...ps, p]); setToast('Post submitted for review.') }}
-              onApprove={(id) => setForumPosts((ps) => ps.map((p) => p.id === id ? { ...p, status: 'approved' } : p))}
-              onReject={(id) => setForumPosts((ps) => ps.filter((p) => p.id !== id))}
-              onLike={(id) => setForumPosts((ps) => ps.map((p) => p.id === id
-                ? { ...p, likes: p.likedByMe ? p.likes - 1 : p.likes + 1, likedByMe: !p.likedByMe }
-                : p))} />
-          ) : isEmpty ? (
-            <BriefingPreview
-              palette={palette} displayFont={tw.displayFont} newsFont={tw.newsFont}
-              prefs={prefs} user={user} onAsk={(q) => send(q)}
-            />
-          ) : (
+          ) : isEmpty && activeThreadId === '' ? (
+            <NewChatScreen palette={palette} displayFont={tw.displayFont}
+              prefs={prefs} user={user} onAsk={(q) => send(q)} />
+          ) : isEmpty && activeFolderId !== null ? (
+            <BriefingPreview palette={palette} displayFont={tw.displayFont}
+              prefs={prefs} user={user} onAsk={(q) => send(q)} />
+          ) : isEmpty ? null : (
             <div className="thread">
               {messages.map((m) => (
                 <Message key={m.id} msg={m} palette={palette} displayFont={tw.displayFont}
-                  compact={tw.compactMessages} onAction={handleAction}
-                  savedIds={savedArticleIds} onToggleSave={toggleSave}
-                  onActionChip={handleActionChip} onFollowup={(f) => send(f)} />
+                  compact={tw.compactMessages} onAction={handleAction} />
               ))}
             </div>
           )}
@@ -375,21 +628,30 @@ User: ${text}`,
         palette={palette} displayFont={tw.displayFont} newsFont={tw.newsFont}
         prefs={prefs} setPrefs={setPrefs}
         user={user}
-        onCreateFolder={(f) => { setFolders((fs) => [...fs, f]); setPrefsOpen(false); setToast(`Folder "${f.name}" creado.`) }}
+        onCreateFolder={async (localFolder) => {
+            setPrefsOpen(false)
+            if (getToken()) {
+              try {
+                const apiFolder = await createFolder({
+                  name: localFolder.name,
+                  topics: localFolder.topics,
+                  frequency: localFolder.frequency,
+                  keywords: localFolder.keywords,
+                })
+                setFolders((fs) => [...fs, _apiFolderToLocal(apiFolder)])
+                setToast(`Folder "${apiFolder.name}" created.`)
+              } catch {
+                setToast('Could not create folder — try again.')
+              }
+            } else {
+              setFolders((fs) => [...fs, localFolder])
+              setToast(`Folder "${localFolder.name}" created.`)
+            }
+          }}
         onSave={() => { setPrefsOpen(false); setToast('Preferences saved.') }}
       />
 
       {tweakControls}
-
-      {folderSettingsTarget && (
-        <FolderSettings
-          folder={folderSettingsTarget}
-          palette={palette}
-          displayFont={tw.displayFont}
-          onSave={(updated) => { updateFolder(updated); setFolderSettingsTarget(null); setToast(`"${updated.name}" updated.`) }}
-          onClose={() => setFolderSettingsTarget(null)}
-        />
-      )}
     </div>
   )
 }

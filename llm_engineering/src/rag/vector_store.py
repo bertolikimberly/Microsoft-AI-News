@@ -25,7 +25,7 @@ log = structlog.get_logger()
 
 # 384-dim model = matches the Vector(384) column on backend.app.models.Article
 _EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-_DEFAULT_DB_URL = "postgresql+psycopg://mainews:mainews_dev@localhost:5432/mainews"
+_DEFAULT_DB_URL = "postgresql+psycopg://mai:mai@localhost:5432/mai_news"
 
 
 def _content_hash(article: Article) -> str:
@@ -78,7 +78,6 @@ class ArticleVectorStore:
         with self._SessionLocal() as db:  # type: Session
             for article, emb in zip(articles, embeddings):
                 # Match the backend Article row by URL (stable identifier).
-                # If you change to matching by id, update both writers.
                 result = db.execute(
                     text("""
                         UPDATE articles

@@ -11,6 +11,7 @@ Azure OpenAI streaming in behind the same surface.
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
@@ -20,7 +21,9 @@ from sqlalchemy.orm import Session
 
 from app.deps import current_user, get_db
 from app.errors import problem
-from app.models import Article, ChatSession, ChatTurn, User
+from app.models import Article, ChatSession, ChatTurn, User, Preferences
+
+log = logging.getLogger(__name__)
 from app.pagination import Page, PageInfo, decode_cursor, encode_cursor
 from app.schemas.chat import (
     MessageIn,
@@ -82,6 +85,37 @@ def _turn_to_out(db: Session, turn: ChatTurn) -> MessageOut:
         citations=citations,
         created_at=turn.created_at,
     )
+
+
+def _extract_chat_history(
+    db: Session,
+    session_id: str,
+    limit: int = 6,
+) -> list[tuple[str, str]]:
+    """
+    Extract the last N turns from a chat session as (role, content) tuples.
+
+    Returns in chronological order (oldest first). The chatbot trims internally
+    but we trim here too (last 6 turns = ~12 messages max) to avoid expensive
+    LLM calls with huge context windows.
+
+    Args:
+        db: Database session
+        session_id: Chat session ID
+        limit: Max number of turns to return (will return up to limit*2 messages)
+
+    Returns:
+        List of (role, content) tuples, ordered oldest-first, ready to pass to chatbot
+    """
+    turns = (
+        db.query(ChatTurn)
+        .filter(ChatTurn.session_id == session_id)
+        .order_by(ChatTurn.created_at.desc())
+        .limit(limit * 2)  # each turn = up to 2 messages (user + assistant)
+        .all()
+    )
+    # Reverse to get chronological order (oldest first)
+    return [(t.role, t.content) for t in reversed(turns)]
 
 
 # ─── Session CRUD ─────────────────────────────────────────────────────────
@@ -250,7 +284,12 @@ def post_message(
     """
     sess = _load_session(db, user, session_id)
 
-    # 1. Persist the user turn synchronously so it can't be lost on disconnect.
+    # 1. Extract history and prefs BEFORE persisting the current user turn so
+    # the new message is not included in the history passed to the chatbot.
+    history_tuples = _extract_chat_history(db, session_id=sess.id, limit=6)
+    user_prefs = user.preferences or Preferences()  # fallback if no prefs set
+
+    # 2. Persist the user turn synchronously so it can't be lost on disconnect.
     user_turn = ChatTurn(
         session_id=sess.id,
         role="user",
@@ -266,28 +305,8 @@ def post_message(
     db.commit()
     db.refresh(user_turn)
 
-    # 2. Pick a "citation" — most recent article in the DB so the frontend
-    # has something to render. Real RAG picks via retrieval.
-    #
-    # We materialize the article's fields into a plain dict *now*, before
-    # the StreamingResponse body iterator starts running. FastAPI closes
-    # the request-scoped DB session as soon as this handler returns, so any
-    # ORM access from inside `event_stream` would hit DetachedInstanceError
-    # on lazy relationships (e.g. `article.source`).
-    sample_article = (
-        db.query(Article).order_by(desc(Article.published_at)).first()
-    )
-    sample_citation: dict | None = None
-    if sample_article is not None:
-        sample_citation = {
-            "article_id": sample_article.id,
-            "title": sample_article.title,
-            "source": sample_article.source.name if sample_article.source else "",
-            "url": sample_article.url,
-            "published_at": sample_article.published_at.isoformat(),
-        }
-
-    # Capture the session id as a plain string for the same reason.
+    # Capture values as plain types before the generator runs (request-scoped
+    # DB session closes when this handler returns).
     sess_id = sess.id
     user_content = body.content
 
@@ -295,36 +314,67 @@ def post_message(
         # Generate the assistant turn ID up-front so turn_start matches the
         # row we eventually persist.
         from app.models.chat import _new_message_id  # local import: avoid widening top-level deps
+        from app.db.session import SessionLocal
         msg_id = _new_message_id()
 
         yield _sse("turn_start", {"message_id": msg_id})
 
-        tokens = _stub_reply_tokens(user_content)
-        for tok in tokens:
-            yield _sse("token", {"content": tok})
+        # Stream directly from the LLM pipeline. Fall back to stub if unavailable.
+        answer_text = ""
+        real_citations: list[dict] = []
+        prompt_tokens = 0
+        completion_tokens = 0
 
+        try:
+            from app.integrations.llm_bridge import stream_chat_reply
+            for event in stream_chat_reply(
+                db=db,
+                user=user,
+                prefs=user_prefs,
+                query=user_content,
+                history=history_tuples,
+            ):
+                if event[0] == "token":
+                    chunk = event[1]
+                    answer_text += chunk
+                    yield _sse("token", {"content": chunk})
+                elif event[0] == "done":
+                    _, real_citations, prompt_tokens, completion_tokens = event
+        except Exception as e:
+            log.warning(f"stream_chat_reply failed, falling back to stub: {type(e).__name__}: {e}")
+            answer_text = "".join(_stub_reply_tokens(user_content))
+            for tok in _stub_reply_tokens(user_content):
+                yield _sse("token", {"content": tok})
+
+        # Emit citations after the answer text
         citations_for_db: list[dict] = []
-        if sample_citation is not None:
-            yield _sse("citation", {"index": 1, **sample_citation})
-            yield _sse("token", {"content": " [1]."})
-            citations_for_db = [{"article_id": sample_citation["article_id"], "index": 1}]
-        else:
-            yield _sse("token", {"content": "."})
+        for cite in real_citations:
+            yield _sse("citation", {
+                "index": cite["index"],
+                "article_id": cite["article_id"],
+                "title": cite["title"],
+                "source": cite["source"],
+                "url": cite["url"],
+                "published_at": cite["published_at"],
+            })
+            citations_for_db.append({
+                "article_id": cite["article_id"],
+                "index": cite["index"],
+            })
 
         # Persist the assistant turn at end-of-stream. We open a fresh
         # session because the request-scoped one closes when the response
         # generator starts streaming.
-        from app.db.session import SessionLocal
         with SessionLocal() as write_db:
             write_db.add(
                 ChatTurn(
                     id=msg_id,
                     session_id=sess_id,
                     role="assistant",
-                    content="".join(tokens) + (" [1]." if sample_citation else "."),
+                    content=answer_text,
                     citations_json=json.dumps(citations_for_db),
-                    prompt_tokens=0,  # placeholders — LLME wires real counts
-                    completion_tokens=0,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                 )
             )
             touched = write_db.get(ChatSession, sess_id)
@@ -336,8 +386,7 @@ def post_message(
             "turn_end",
             {
                 "message_id": msg_id,
-                # Placeholder telemetry. LLME wires real tokenizer counts here.
-                "tokens_used": {"prompt": 0, "completion": 0},
+                "tokens_used": {"prompt": prompt_tokens, "completion": completion_tokens},
             },
         )
 

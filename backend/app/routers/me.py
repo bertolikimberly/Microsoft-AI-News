@@ -94,6 +94,7 @@ def get_preferences(user: User = Depends(current_user)) -> PreferencesOut:
         length=p.length,
         tone=p.tone,
         language=p.language,
+        timezone=p.timezone,
     )
 
 
@@ -125,6 +126,7 @@ def put_preferences(
     p.length = body.length
     p.tone = body.tone
     p.language = body.language
+    p.timezone = body.timezone
     db.commit()
     return body  # the same shape — echo back
 
