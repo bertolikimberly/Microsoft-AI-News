@@ -35,8 +35,6 @@ export default function SavedView({ palette, displayFont, savedArticles, savedId
               key={card.id}
               card={card}
               palette={palette}
-              saved={savedIds.has(card.id)}
-              onToggleSave={onToggleSave}
               onAction={onAction}
             />
           ))}

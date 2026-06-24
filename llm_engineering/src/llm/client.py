@@ -45,6 +45,20 @@ class _BaseLLMClient(ABC):
         max_tokens: int = 512,
     ) -> tuple[str, TokenUsage]: ...
 
+    @abstractmethod
+    def stream_complete(
+        self,
+        system: str,
+        messages: list[dict],
+        model: str | None = None,
+        max_tokens: int = 1500,
+    ):
+        """
+        Yields (text_chunk, token_usage) pairs.
+        token_usage is None for every yield except the last, where text_chunk is "".
+        """
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Anthropic provider
@@ -106,6 +120,26 @@ class _AnthropicClient(_BaseLLMClient):
             use_cache=False,
         )
 
+    def stream_complete(self, system, messages, model=None, max_tokens=1500):
+        model = model or settings.llm_model
+        system_content = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+        with self._client.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_content,
+            messages=messages,
+        ) as stream:
+            for text in stream.text_stream:
+                yield text, None
+            msg = stream.get_final_message()
+            u = msg.usage
+            yield "", TokenUsage(
+                input_tokens=u.input_tokens,
+                output_tokens=u.output_tokens,
+                cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
+                cache_write_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
+            )
+
 
 # ---------------------------------------------------------------------------
 # OpenAI provider
@@ -166,6 +200,32 @@ class _OpenAIClient(_BaseLLMClient):
             model=settings.openai_fast_model,
             max_tokens=max_tokens,
         )
+
+    def stream_complete(self, system, messages, model=None, max_tokens=1500):
+        model = model or settings.openai_model
+        full_messages = [{"role": "system", "content": system}, *messages]
+        stream = self._client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=full_messages,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+        final_usage = TokenUsage()
+        for chunk in stream:
+            if getattr(chunk, "usage", None):
+                u = chunk.usage
+                cached = 0
+                if getattr(u, "prompt_tokens_details", None):
+                    cached = getattr(u.prompt_tokens_details, "cached_tokens", 0) or 0
+                final_usage = TokenUsage(
+                    input_tokens=u.prompt_tokens,
+                    output_tokens=u.completion_tokens,
+                    cache_read_tokens=cached,
+                )
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content, None
+        yield "", final_usage
 
 
 # ---------------------------------------------------------------------------

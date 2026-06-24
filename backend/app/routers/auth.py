@@ -1,22 +1,43 @@
 """
 Auth endpoints — /api/v1/auth/*.
 
-  - /login    → start the Entra OAuth flow (302 to Microsoft).
-  - /callback → exchange the code, provision the user, redirect to the
-                frontend with our JWT in the URL fragment.
-  - /logout   → 204; bearer-token auth is stateless, so logout is the
-                frontend forgetting the token.
+OAuth (Google):
+  - /login           → start the OAuth flow (302 to Google).
+  - /callback        → exchange the code, provision the user, redirect to
+                       the frontend with our JWT in the URL fragment.
+
+Magic link (email-based, any provider):
+  - /email/request-login  → POST {email}. Sends a one-time login link via
+                            ACS Email. Always returns 200 to avoid
+                            disclosing whether the email exists.
+  - /email/verify         → GET ?token=... The link the user clicks in
+                            their inbox. Verifies, provisions, redirects
+                            to the frontend like /callback does.
+
+Shared:
+  - /logout    → 204; bearer-token auth is stateless, so logout is the
+                 frontend forgetting the token.
   - /dev-login → dev-only shortcut: mints a JWT for a fixed test user.
-                Lets us build the rest of the API without configuring Entra.
+
+The Google variant exists so users with a Google account can sign in
+without typing an email and waiting for an inbox round-trip. The email
+variant exists so anyone with a working email address — Microsoft,
+custom domain, Yahoo, etc. — can also sign in. The two flows produce
+identical session JWTs and provision identical User rows, so frontend
+code doesn't have to care which one was used.
 """
 
+import logging
 import secrets
 
-from fastapi import APIRouter, Cookie, Depends, Response, status
+from fastapi import APIRouter, Body, Cookie, Depends, Response, status
+
+log = logging.getLogger(__name__)
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.auth import entra
+from app.auth import email_link, google as oauth
 from app.auth.jwt import mint as mint_jwt
 from app.config import settings
 from app.deps import get_db
@@ -58,10 +79,10 @@ _DEV_USER = {
 @router.get("/login")
 def login() -> RedirectResponse:
     """Start the OAuth flow: stash state + PKCE verifier, 302 to Entra."""
-    state = entra.generate_state()
-    verifier, challenge = entra.generate_pkce_pair()
+    state = oauth.generate_state()
+    verifier, challenge = oauth.generate_pkce_pair()
 
-    authorize_url = entra.build_authorize_url(state=state, code_challenge=challenge)
+    authorize_url = oauth.build_authorize_url(state=state, code_challenge=challenge)
 
     response = RedirectResponse(url=authorize_url, status_code=302)
     response.set_cookie(_STATE_COOKIE, state, **_oauth_cookie_kwargs())
@@ -106,7 +127,7 @@ def callback(
         raise problem(status=400, title="State mismatch — possible CSRF")
 
     try:
-        identity = entra.exchange_code(code=code, code_verifier=oauth_verifier)
+        identity = oauth.exchange_code(code=code, code_verifier=oauth_verifier)
     except ValueError as e:
         raise problem(status=400, title="Token exchange failed", detail=str(e))
 
@@ -132,6 +153,85 @@ def callback(
     response.delete_cookie(_STATE_COOKIE, path="/api/v1/auth")
     response.delete_cookie(_VERIFIER_COOKIE, path="/api/v1/auth")
     return response
+
+
+# ─── Magic-link (email) flow ─────────────────────────────────────────
+
+
+class _EmailRequestIn(BaseModel):
+    email: EmailStr
+
+
+@router.post("/email/request-login", status_code=status.HTTP_200_OK)
+def request_login_email(body: _EmailRequestIn) -> dict:
+    """
+    Send a one-time login link to `email` via ACS.
+
+    Always returns 200 with a generic message — even if the email is
+    malformed, ACS is misconfigured, or the send fails. This prevents
+    attackers from probing which email addresses are users by timing or
+    error-code differences. Send failures are logged server-side.
+
+    In dev mode, the response also contains `dev_link` so the team can
+    log in without email delivery configured.
+    """
+    email = body.email.strip().lower()
+    response: dict = {
+        "status": "ok",
+        "message": (
+            "If an account is associated with this address, a sign-in link "
+            "has been sent. Check your inbox."
+        ),
+    }
+
+    if email_link.is_valid_email(email):
+        token = email_link.generate_login_token(email)
+        login_url = email_link.build_login_url(token)
+        email_link.send_login_email(to_email=email, login_url=login_url)
+
+        if settings.is_dev:
+            response["dev_link"] = login_url
+            log.info("dev magic link for %s → %s", email, login_url)
+
+    return response
+
+
+@router.get("/email/verify")
+def verify_login_email(
+    token: str | None = None,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """
+    Validate the token from the email, provision the user if new, mint
+    a session JWT, and redirect to the frontend — mirrors the OAuth
+    /callback contract.
+    """
+    if not token:
+        raise problem(status=400, title="Missing token")
+
+    try:
+        identity = email_link.verify_login_token(token)
+    except ValueError as e:
+        raise problem(status=400, title="Invalid login link", detail=str(e))
+
+    user = db.query(User).filter(User.entra_oid == identity.oid).first()
+    if user is None:
+        user = User(
+            entra_oid=identity.oid,
+            entra_tid=identity.tid,
+            email=identity.email,
+            display_name=identity.display_name,
+            preferences=Preferences(),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    session_token, _ = mint_jwt(user.id)
+    return RedirectResponse(
+        url=f"{settings.frontend_url}/#access_token={session_token}",
+        status_code=302,
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

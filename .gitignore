@@ -64,6 +64,13 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# ── Node / frontend ────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
 # ── OS files ───────────────────────────────────────────────────────────────
 .DS_Store
 

@@ -170,84 +170,23 @@
     }
     .display.math{display: block; text-align: center; margin: 0.5rem auto;}
   </style>
-  <style>
-    :root {
-      --fg: #1f2328;
-      --muted: #57606a;
-      --border: #d0d7de;
-      --bg: #ffffff;
-      --bg-alt: #f6f8fa;
-      --accent: #0969da;
-    }
-    html, body { background: var(--bg); color: var(--fg); }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      line-height: 1.55;
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 2.5rem 1.5rem 4rem;
-    }
-    h1, h2, h3 { line-height: 1.25; }
-    h1 { font-size: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
-    h2 { font-size: 1.35rem; margin-top: 2.4rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
-    h3 { font-size: 1.05rem; margin-top: 1.4rem; color: var(--muted); }
-    blockquote {
-      border-left: 3px solid var(--border);
-      color: var(--muted);
-      margin: 1rem 0;
-      padding: .25rem 1rem;
-    }
-    hr { border: 0; border-top: 1px solid var(--border); margin: 2rem 0; }
-    a { color: var(--accent); }
-    code {
-      background: var(--bg-alt);
-      padding: .1em .35em;
-      border-radius: 4px;
-      font-size: .9em;
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    }
-    pre {
-      background: var(--bg-alt);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1rem;
-      overflow-x: auto;
-      font-size: .88em;
-      line-height: 1.4;
-    }
-    pre code { background: transparent; padding: 0; }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 1rem 0;
-      font-size: .92em;
-    }
-    th, td {
-      border: 1px solid var(--border);
-      padding: .5rem .7rem;
-      text-align: left;
-      vertical-align: top;
-    }
-    th { background: var(--bg-alt); font-weight: 600; }
-    tr:nth-child(even) td { background: #fbfcfd; }
-    ul, ol { padding-left: 1.4rem; }
-    strong { font-weight: 600; }
-  </style>
 </head>
 <body>
 <header id="title-block-header">
 <h1 class="title">Hosting Plan — Tech Intelligence Newsletter</h1>
 </header>
-<h1 id="hosting-plan-free-tier-production-deploy">Hosting Plan —
-Free-Tier Production Deploy</h1>
+<h1 id="hosting-plan-azure-student-tier-production-deploy">Hosting Plan
+— Azure Student-Tier Production Deploy</h1>
 <blockquote>
 <p>What we actually deploy for the capstone — laptop-first build,
-free-tier hosted demo. See <a
+Azure-hosted demo, sized for the <strong>Azure for Students</strong>
+($100/yr credit) ceiling. See <a
 href="./personas_and_features.md">personas_and_features.md</a> for the
 product, <a href="./feature_endpoints.md">feature_endpoints.md</a> for
 the API surface.</p>
-<p>Total recurring cost: <strong>$0</strong> + cents-to-low-dollars in
-LLM tokens.</p>
+<p>Total recurring cost in Year 1: <strong>$0</strong> (everything fits
+free tiers or one-time free offers) + cents-to-low-dollars in LLM
+tokens.</p>
 </blockquote>
 <hr />
 <h2 id="stack-summary">1. Stack Summary</h2>
@@ -264,7 +203,7 @@ LLM tokens.</p>
 <th>Piece</th>
 <th>Provider</th>
 <th>Plan</th>
-<th>Free-tier limit</th>
+<th>Year-1 cost</th>
 <th>Why this one</th>
 </tr>
 </thead>
@@ -272,83 +211,78 @@ LLM tokens.</p>
 <tr>
 <td><strong>Backend API</strong> (<a
 href="../backend/">backend/</a>)</td>
-<td><strong>Render</strong></td>
-<td>Free Web Service</td>
-<td>750 hr/month total · 512 MB RAM · sleeps after 15 min idle · ~30 s
-cold start</td>
-<td>Deploys from Dockerfile, HTTPS free, generous quotas. Blueprint
-config in <a href="../render.yaml">render.yaml</a>.</td>
+<td><strong>Azure Container Apps</strong></td>
+<td>Consumption, 0.5 vCPU / 1 GiB, scale-to-zero</td>
+<td>$0 under free monthly grant (180k vCPU-sec)</td>
+<td>Scales to zero between cron fires — compute bill is effectively zero
+at MVP traffic. Pulls image from ghcr.io.</td>
 </tr>
 <tr>
 <td><strong>Frontend</strong> (<a href="../frontend/">frontend/</a>,
 Next.js)</td>
-<td><strong>Vercel</strong></td>
-<td>Hobby</td>
-<td>100 GB bandwidth/month · unlimited static deploys</td>
-<td>Made by the Next.js team; near-zero config.</td>
+<td><strong>Azure Static Web Apps</strong></td>
+<td>Free</td>
+<td>$0</td>
+<td>First-class Next.js support, free SSL, free custom domains.</td>
 </tr>
 <tr>
 <td><strong>PostgreSQL + pgvector</strong></td>
-<td><strong>Neon</strong></td>
-<td>Free</td>
-<td>0.5 GB storage · 191 compute-hr/month · auto-suspends after
-idle</td>
-<td>Real Postgres, pgvector supported, no card required.</td>
+<td><strong>Azure Database for PostgreSQL</strong></td>
+<td>Flexible Server, Burstable B1ms, 32 GB</td>
+<td>$0 for first 12 months (then ~$13/mo)</td>
+<td>Real Postgres with pgvector via <code>azure.extensions</code>. Free
+for a year on new accounts.</td>
+</tr>
+<tr>
+<td><strong>Container registry</strong></td>
+<td><strong>GitHub Container Registry</strong> (ghcr.io)</td>
+<td>Free for public repos</td>
+<td>$0</td>
+<td>Skips Azure Container Registry’s ~$5/mo Basic tier.</td>
+</tr>
+<tr>
+<td><strong>Log Analytics</strong></td>
+<td><strong>Azure Monitor Log Analytics</strong></td>
+<td>PerGB2018</td>
+<td>$0 under 5 GB free monthly grant</td>
+<td>Required by Container Apps; cheapest option that integrates.</td>
 </tr>
 <tr>
 <td><strong>LLM</strong></td>
-<td><strong>OpenAI API</strong></td>
+<td><strong>OpenAI</strong> + <strong>Anthropic</strong> API</td>
 <td>PAYG</td>
-<td>No free tier — set a $-cap on the dashboard</td>
-<td>Public pricing → defensible cost-per-user in the report. Dev
-fallback: Ollama local.</td>
+<td>cents-to-dollars</td>
+<td>Public pricing → defensible cost-per-user in the report. Hard $-caps
+on both accounts.</td>
 </tr>
 <tr>
 <td><strong>Email</strong></td>
 <td><strong>Resend</strong></td>
 <td>Free</td>
-<td>3 000 emails/month · 100/day</td>
-<td>Clean SDK; sender domain must be verified in the Resend dashboard
-before real delivery works.</td>
+<td>$0</td>
+<td>3 000 emails/month free. Could migrate to Azure Communication
+Services later.</td>
 </tr>
 <tr>
 <td><strong>Identity</strong></td>
 <td><strong>Microsoft Entra ID</strong></td>
 <td>Free standalone tenant</td>
-<td>50 000 monthly active users free</td>
-<td>Real OIDC + “Sign in with Microsoft” — no Azure subscription
-required.</td>
-</tr>
-<tr>
-<td><strong>Object storage</strong> (raw HTML)</td>
-<td>Server filesystem at MVP; <strong>Cloudflare R2</strong> later</td>
-<td>R2 free tier</td>
-<td>10 GB storage · no egress fees</td>
-<td>Capstone fits on Render disk; R2 reserved for scale.</td>
-</tr>
-<tr>
-<td><strong>Cache</strong></td>
-<td>In-process Python dict (MVP); <strong>Upstash Redis</strong> if
-needed</td>
-<td>Upstash free</td>
-<td>10 000 commands/day</td>
-<td>Single backend instance — Redis is over-engineering at MVP.</td>
+<td>$0</td>
+<td>Real OIDC + “Sign in with Microsoft”.</td>
 </tr>
 <tr>
 <td><strong>CI / cron</strong></td>
 <td><strong>GitHub Actions</strong></td>
 <td>Free for public repos</td>
-<td>2 000 min/month private; unlimited public</td>
-<td>Triggers the digest worker via <code>/api/v1/internal/*</code> (see
-<a
-href="../backend/.env.example"><code>WORKER_SHARED_SECRET</code></a>).</td>
+<td>$0</td>
+<td>Hourly digest cron + image build/deploy workflow.</td>
 </tr>
 <tr>
 <td><strong>Secrets</strong></td>
-<td><code>.env</code> locally · Render env vars in prod</td>
+<td>Container App secrets (encrypted)</td>
 <td>—</td>
-<td>—</td>
-<td>No Key Vault needed; Render encrypts env vars at rest.</td>
+<td>$0</td>
+<td>Lighter than Azure Key Vault for MVP; swap to KV later.</td>
 </tr>
 </tbody>
 </table>
@@ -357,17 +291,18 @@ href="../backend/.env.example"><code>WORKER_SHARED_SECRET</code></a>).</td>
 <pre><code>                       USER&#39;S BROWSER
                               │
                               ▼
-                Vercel ─── Next.js frontend
+            Azure Static Web Apps ─── Next.js frontend
                               │
                               │ HTTPS / REST + SSE
                               ▼
-                Render ─── FastAPI backend  ◄── Entra ID (sign-in)
-                              │                ◄── OpenAI API (LLM)
-                              │                ◄── Resend (email)
+            Azure Container Apps ─── FastAPI backend ◄── Entra ID (sign-in)
+                              │                       ◄── OpenAI + Anthropic
+                              │                       ◄── Resend (email)
                               ▼
-                    Neon (Postgres + pgvector)</code></pre>
-<p>Two hosts (Vercel + Render). Three external API providers (Entra,
-OpenAI, Resend). One managed database (Neon). One repo, one deploy.</p>
+                Azure Database for PostgreSQL Flexible Server
+                          (with pgvector)</code></pre>
+<p>One cloud (Azure). Three external API providers (OpenAI, Anthropic,
+Resend). One managed database. One repo, one CI/CD pipeline.</p>
 <hr />
 <h2 id="deploy-order-one-time-setup">3. Deploy Order (one-time
 setup)</h2>
@@ -396,78 +331,97 @@ href="../backend/.env.example">backend/.env.example</a></td>
 </tr>
 <tr>
 <td>2</td>
-<td>Create Neon project, copy connection string</td>
-<td>https://neon.tech</td>
-<td>Replace <code>postgres://</code> →
-<code>postgresql+psycopg://</code>, keep
-<code>?sslmode=require</code></td>
+<td>Create OpenAI + Anthropic API keys + <strong>set usage
+caps</strong></td>
+<td>platform.openai.com / console.anthropic.com</td>
+<td>Caps matter — runaway bugs can be expensive</td>
 </tr>
 <tr>
 <td>3</td>
 <td>Sign up for Resend, generate API key</td>
 <td>https://resend.com</td>
-<td>Verify a sending domain (or use <code>onboarding@resend.dev</code>
-while testing)</td>
+<td>Verify a sending domain</td>
 </tr>
 <tr>
 <td>4</td>
-<td>Create OpenAI API key + <strong>set a usage cap</strong></td>
-<td>https://platform.openai.com</td>
-<td>Cap matters — accidents can be expensive</td>
+<td><code>az login</code> +
+<code>az group create --name mai-news-rg --location westeurope</code></td>
+<td>local terminal</td>
+<td>Pick the region closest to your users</td>
 </tr>
 <tr>
 <td>5</td>
-<td>Push the repo to GitHub</td>
-<td>—</td>
-<td>Render reads <code>render.yaml</code> from the default branch</td>
+<td><code>az deployment group create -g mai-news-rg -f infra/main.bicep -p infra/main.parameters.json -p postgresAdminPassword=$(openssl rand -base64 24)</code></td>
+<td>local terminal</td>
+<td>Provisions Postgres, Container Apps, Static Web App, Log
+Analytics</td>
 </tr>
 <tr>
 <td>6</td>
-<td>Render → New → Blueprint → connect repo</td>
-<td>https://render.com</td>
-<td>It reads <a href="../render.yaml">render.yaml</a> and creates the
-service</td>
+<td><code>az containerapp secret set ...</code> for JWT, Entra, OpenAI,
+Anthropic, Resend, worker secrets</td>
+<td>local terminal</td>
+<td>See <a href="../infra/README.md">infra/README.md</a> for the full
+command</td>
 </tr>
 <tr>
 <td>7</td>
-<td>Fill in the <code>sync: false</code> env vars in Render
-dashboard</td>
-<td>Render</td>
-<td>DB URL, Entra IDs, OpenAI/Resend keys</td>
+<td>Set up GitHub Actions secrets: <code>AZURE_CREDENTIALS</code>,
+<code>AZURE_RESOURCE_GROUP</code>, <code>CONTAINER_APP_NAME</code></td>
+<td>GitHub repo settings</td>
+<td>First push to <code>main</code> triggers image build + Container App
+roll</td>
 </tr>
 <tr>
 <td>8</td>
-<td>Deploy the frontend</td>
-<td>https://vercel.com</td>
-<td>Connect the repo, set root dir to <code>frontend/</code></td>
+<td>Get the Static Web App deployment token from the portal; add as
+<code>AZURE_STATIC_WEB_APPS_API_TOKEN</code></td>
+<td>GitHub repo settings</td>
+<td>Frontend deploys via SWA’s auto-generated workflow</td>
 </tr>
 <tr>
 <td>9</td>
-<td>Set <code>FRONTEND_URL</code> + <code>ALLOWED_ORIGINS</code> in
-Render to the Vercel URL</td>
-<td>Render</td>
-<td>Re-deploys automatically</td>
+<td>Re-run step 5 with
+<code>frontendUrl=https://&lt;your-swa&gt;.azurestaticapps.net</code> so
+CORS is wired</td>
+<td>local terminal</td>
+<td>Bicep is idempotent</td>
 </tr>
 <tr>
 <td>10</td>
 <td>Update Entra App Registration redirect URI to the deployed
 <code>/auth/callback</code></td>
 <td>Entra portal</td>
-<td><code>https://tech-intel-api.onrender.com/api/v1/auth/callback</code></td>
+<td><code>https://&lt;your-container-app&gt;.azurecontainerapps.io/api/v1/auth/callback</code></td>
 </tr>
 </tbody>
 </table>
+<p>The full walkthrough with exact commands is in <strong><a
+href="../infra/README.md">infra/README.md</a></strong>.</p>
 <hr />
 <h2 id="cost-model">4. Cost Model</h2>
-<p><strong>Recurring infra:</strong> $0/month.</p>
+<p><strong>Year-1 recurring infra:</strong>
+<strong>$0/month</strong>.</p>
+<p>Every Azure resource is either on the perpetual Free tier (Container
+Apps free grant, Static Web Apps Free, Log Analytics 5 GB grant) or on a
+12-month free offer (Postgres Flexible Server B1ms). The image registry
+(ghcr.io) is free for public GitHub repos.</p>
 <p><strong>Variable (LLM tokens):</strong> - Article summary cached
 across users (keyed by <code>article_id</code> + <code>length</code> +
 <code>tone</code>) — ~$0.003 per article on <code>gpt-4o-mini</code>. -
-Chat: ~$0.01–0.05 per conversation on <code>gpt-4o</code>. - Embeddings:
-<strong>$0</strong> — sentence-transformers runs in-process (CPU).</p>
+Chat: ~$0.01–0.05 per conversation on <code>gpt-4o</code> or
+<code>claude-sonnet</code>. - Embeddings: <strong>$0</strong> —
+sentence-transformers <code>all-MiniLM-L6-v2</code> runs in-process
+(CPU), pre-baked into the Docker image so cold starts don’t redownload
+it.</p>
 <p><strong>Demo-scale estimate:</strong> 100 users, weekly digest, 10
 chat conversations/user/month → roughly <strong>$5–15/month</strong> in
-LLM tokens. Easily within an OpenAI hard cap.</p>
+LLM tokens. Easily within an OpenAI / Anthropic hard cap.</p>
+<p><strong>Year-2 cliff:</strong> the 12-month free Postgres offer
+expires. Options: - Migrate to <strong>Neon free tier</strong> (still
+Postgres + pgvector, zero code change — just swap
+<code>DATABASE_URL</code>) - Stay on Azure Postgres B1ms (~$13/mo,
+~$160/yr — would consume most of a renewed student credit)</p>
 <hr />
 <h2 id="known-trade-offs">5. Known Trade-offs</h2>
 <table>
@@ -485,50 +439,56 @@ LLM tokens. Easily within an OpenAI hard cap.</p>
 </thead>
 <tbody>
 <tr>
-<td>Render free tier sleeps after 15 min idle</td>
-<td>First request after sleep is ~30 s</td>
-<td>Ping <code>/api/v1/health/live</code> every 10 min from a free cron
-service; or upgrade to Render Starter ($7/mo) for the demo</td>
+<td>Container Apps cold starts on scale-to-zero</td>
+<td>First request after idle is ~2–5s while the replica spins</td>
+<td>Acceptable for a hobbyist-traffic capstone; cron fires keep it warm
+during business hours. The sentence-transformers model is pre-loaded
+into the image so cold starts don’t have to re-download it.</td>
 </tr>
 <tr>
-<td>Neon auto-suspends idle compute</td>
-<td>Reconnect adds latency</td>
-<td>SQLAlchemy’s <code>pool_pre_ping=True</code> (already on — see <a
-href="../backend/app/db/session.py">backend/app/db/session.py</a>)
-handles it</td>
+<td>Postgres B1ms is small (1 vCore, 2 GB RAM)</td>
+<td>Fine for MVP; tight for heavy vector search</td>
+<td>Tune <code>ivfflat</code> index <code>lists</code> parameter once
+the archive grows past ~10k articles</td>
 </tr>
 <tr>
-<td>OpenAI tokens cost real money</td>
+<td>1 GiB RAM on the Container App</td>
+<td>sentence-transformers uses ~500 MB at peak inference; close to the
+ceiling</td>
+<td>Pre-loading the model in <code>Dockerfile</code> so it doesn’t sit
+in /tmp at runtime. If memory pressure surfaces, swap to OpenAI
+embeddings (~$0.02/M tokens).</td>
+</tr>
+<tr>
+<td>LLM tokens cost real money</td>
 <td>Capstone-scale demo is cents, but a bug could spike</td>
-<td>Hard $-cap on the OpenAI account + per-route rate limits in the
-API</td>
+<td>Hard $-caps on both OpenAI and Anthropic accounts + per-route rate
+limits</td>
 </tr>
 <tr>
-<td>Vercel + Render + Neon default to US regions</td>
-<td>Latency for EU users; GDPR data-residency flag for the report</td>
-<td>Render <code>region: frankfurt</code>, Neon EU region, Vercel
-functions in EU — all free; configure if a real EU user is in scope</td>
+<td>All-Azure routes EU traffic via <code>westeurope</code></td>
+<td>Latency is fine for EU users; US users will see ~100 ms RTT</td>
+<td>Region is configurable in
+<code>infra/main.parameters.json</code></td>
 </tr>
 <tr>
-<td>No SLA on any free tier</td>
+<td>No SLA on free tiers</td>
 <td>Service outages possible</td>
 <td>Acceptable for a capstone; mention in the report</td>
 </tr>
 <tr>
-<td>File storage on Render disk is ephemeral</td>
-<td>Container restart loses files</td>
-<td>Move raw-HTML storage to R2 before any real article archive
-matters</td>
+<td>Postgres free offer expires at 12 months</td>
+<td>Year-2 stack is no longer $0</td>
+<td>See “Year-2 cliff” in §4 — easy migration to Neon</td>
 </tr>
 </tbody>
 </table>
 <hr />
-<h2 id="migration-path-back-to-azure-for-the-report">6. Migration Path
-Back to Azure (for the report)</h2>
-<p>The report can position this deployment as “the free-tier equivalent
-of an Azure-native build.” Every piece swaps at the adapter /
-connection-string layer — application code (FastAPI, SQLAlchemy, the
-OAuth flow) is unchanged.</p>
+<h2 id="migration-alternative-hosts-for-the-report">6. Migration /
+Alternative Hosts (for the report)</h2>
+<p>The whole stack is portable — application code (FastAPI, SQLAlchemy,
+the OAuth flow) is unchanged across hosts. The free-tier equivalent on a
+different cloud:</p>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -538,50 +498,40 @@ OAuth flow) is unchanged.</p>
 <thead>
 <tr>
 <th>This deployment</th>
-<th>Azure equivalent</th>
+<th>Render/Vercel equivalent</th>
 <th>Effort to swap</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Render</td>
 <td>Azure Container Apps</td>
-<td>new Dockerfile target + connection strings</td>
+<td>Render Web Service (Free)</td>
+<td>swap deploy target, keep Dockerfile</td>
 </tr>
 <tr>
-<td>Vercel</td>
 <td>Azure Static Web Apps</td>
-<td>rebuild + redeploy</td>
+<td>Vercel Hobby</td>
+<td>reconnect repo, build settings auto-detected</td>
 </tr>
 <tr>
-<td>Neon</td>
-<td>Azure PostgreSQL Flexible Server</td>
-<td>connection string</td>
+<td>Azure Postgres Flexible Server</td>
+<td>Neon Free</td>
+<td>connection string only</td>
 </tr>
 <tr>
-<td>Free Entra tenant</td>
 <td>Microsoft corporate Entra tenant</td>
-<td>App Registration in the corporate directory; same OIDC code</td>
+<td>Free standalone Entra tenant</td>
+<td>App Registration in a different directory; same OIDC code</td>
 </tr>
 <tr>
-<td>OpenAI direct</td>
-<td>Azure OpenAI Service</td>
-<td>endpoint + auth header (SDK largely compatible)</td>
+<td>Container App secrets</td>
+<td>Render env vars</td>
+<td>UI step only</td>
 </tr>
 <tr>
-<td>Resend</td>
-<td>Azure Communication Services</td>
-<td>swap email-client adapter</td>
-</tr>
-<tr>
-<td>GitHub Actions cron</td>
-<td>Container Apps Job (cron)</td>
-<td>rewrite the workflow as a job spec</td>
-</tr>
-<tr>
-<td><code>.env</code> / Render env vars</td>
-<td>Azure Key Vault</td>
-<td>adapter only</td>
+<td>ghcr.io</td>
+<td>Render’s built-in registry</td>
+<td>Render builds from source — no separate registry</td>
 </tr>
 </tbody>
 </table>
@@ -601,25 +551,58 @@ Code for This</h2>
 </thead>
 <tbody>
 <tr>
-<td><a href="../backend/Dockerfile">backend/Dockerfile</a></td>
-<td>Builds the Python 3.12 image Render deploys</td>
+<td><a href="../infra/main.bicep">infra/main.bicep</a></td>
+<td>Provisions the whole Azure stack — Postgres + pgvector ext,
+Container Apps env, Container App, Static Web App, Log Analytics</td>
 </tr>
 <tr>
-<td><a href="../render.yaml">render.yaml</a></td>
-<td>Blueprint — Render reads this and provisions everything</td>
+<td><a
+href="../infra/main.parameters.json">infra/main.parameters.json</a></td>
+<td>Default parameter values (region, project name, image
+reference)</td>
+</tr>
+<tr>
+<td><a href="../infra/README.md">infra/README.md</a></td>
+<td>Step-by-step deploy guide with exact <code>az</code> commands + cost
+notes</td>
+</tr>
+<tr>
+<td><a
+href="../.github/workflows/deploy-backend.yml">.github/workflows/deploy-backend.yml</a></td>
+<td>Builds + pushes the image to ghcr.io and rolls the Container App on
+every push to <code>main</code></td>
+</tr>
+<tr>
+<td><a
+href="../.github/workflows/digest-cron.yml">.github/workflows/digest-cron.yml</a></td>
+<td>Hourly cron that fires the digest worker webhook — TZ-aware so each
+user gets 08:00 in their own timezone</td>
+</tr>
+<tr>
+<td><a href="../backend/Dockerfile">backend/Dockerfile</a></td>
+<td>Python 3.12 image; pre-downloads the sentence-transformers model at
+build so Container Apps cold starts don’t refetch it</td>
 </tr>
 <tr>
 <td><a href="../backend/.env.example">backend/.env.example</a></td>
-<td>Full env-var reference with per-service setup steps</td>
+<td>Full env-var reference with Azure Postgres + Neon + Docker Compose
+connection string examples</td>
 </tr>
 <tr>
 <td><a href="../backend/app/config.py">backend/app/config.py</a></td>
 <td>Typed settings (incl. <code>allowed_origins</code>,
-<code>openai_api_key</code>, <code>resend_api_key</code>)</td>
+<code>embedding_model</code>, <code>embedding_dim</code>)</td>
 </tr>
 <tr>
 <td><a href="../backend/app/main.py">backend/app/main.py</a></td>
-<td>CORS now reads <code>allowed_origins</code> in prod</td>
+<td>Runs <code>CREATE EXTENSION IF NOT EXISTS vector</code> + creates
+the ivfflat index at startup so the app works against fresh Azure
+Postgres</td>
+</tr>
+<tr>
+<td><a href="../docker-compose.yml">docker-compose.yml</a></td>
+<td>Local dev Postgres + pgvector (same image type as Azure) so dev
+matches prod</td>
 </tr>
 </tbody>
 </table>
@@ -641,27 +624,33 @@ Code for This</h2>
 <tbody>
 <tr>
 <td>HOST-1</td>
-<td>Region — Oregon (default in render.yaml) or Frankfurt for EU
-latency?</td>
+<td>Region — <code>westeurope</code> (default) or somewhere else for the
+demo audience?</td>
 <td>Backend Dev 1</td>
 </tr>
 <tr>
 <td>HOST-2</td>
-<td>Keep Render free + cold-start pinger, or pay $7/mo for the
-demo?</td>
+<td>After Year 1, migrate Postgres to Neon free tier or pay ~$13/mo to
+keep all-Azure?</td>
 <td>Team</td>
 </tr>
 <tr>
 <td>HOST-3</td>
-<td>Custom domain (cosmetic) or stay on <code>*.onrender.com</code> /
-<code>*.vercel.app</code>?</td>
+<td>Custom domain or stay on <code>*.azurecontainerapps.io</code> /
+<code>*.azurestaticapps.net</code>?</td>
 <td>Backend Dev 1</td>
 </tr>
 <tr>
 <td>HOST-4</td>
-<td>When to switch raw-HTML storage from local disk to Cloudflare
-R2</td>
-<td>Data Engineer 1</td>
+<td>Swap sentence-transformers for OpenAI embeddings to halve RAM
+footprint?</td>
+<td>LLM Engineer</td>
+</tr>
+<tr>
+<td>HOST-5</td>
+<td>Move secrets from Container App secret store to Azure Key Vault for
+the report-grade story?</td>
+<td>Backend Dev 1</td>
 </tr>
 </tbody>
 </table>

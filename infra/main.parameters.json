@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "francecentral"
+    },
+    "projectName": {
+      "value": "mainews"
+    },
+    "backendImage": {
+      "value": "ghcr.io/irenegracia/microsoft-ai-news-backend:latest"
+    },
+    "postgresAdminUser": {
+      "value": "mai_admin"
+    },
+    "frontendUrl": {
+      "value": ""
+    }
+  }
+}

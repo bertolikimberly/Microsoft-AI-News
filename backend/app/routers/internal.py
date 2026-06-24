@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header
 
 from app.config import settings
 from app.errors import problem
-from app.workers import digest_worker
+from app.workers import digest_worker, ingest_worker
 
 router = APIRouter(prefix="/internal", tags=["internal"], include_in_schema=False)
 
@@ -42,4 +42,18 @@ def run_digest_worker(authorization: str | None = Header(default=None)) -> dict:
     """
     _require_worker_secret(authorization)
     result = digest_worker.run()
+    return {"status": "ok", **result}
+
+
+@router.post("/run-ingest")
+def run_ingest(authorization: str | None = Header(default=None)) -> dict:
+    """
+    Fetch all RSS sources across every scrape tier, deduplicate, embed,
+    and index into pgvector. Does NOT generate digests.
+
+    Safe to call manually or from a GitHub Actions cron schedule.
+    Idempotent — re-indexing an already-embedded article is a cheap upsert.
+    """
+    _require_worker_secret(authorization)
+    result = ingest_worker.run()
     return {"status": "ok", **result}

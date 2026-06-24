@@ -41,11 +41,12 @@ class Chatbot:
         """
         history = history or []
 
-        # 1. Retrieve relevant articles
+        # 1. Retrieve relevant articles, optionally constrained to the user's
+        # topic interests so the chat answer doesn't surface off-topic news.
         results = self._store.retrieve(
             query=query,
             top_k=settings.retrieval_top_k,
-            category_filter=user.interests if user.interests else None,
+            topic_filter=user.topic_tags if user.topic_tags else None,
         )
         retrieved_articles = [article for article, _score in results]
 
@@ -67,6 +68,41 @@ class Chatbot:
             sources=retrieved_articles,
             token_cost=token_usage,
         )
+
+    def stream_chat(
+        self,
+        query: str,
+        user: UserProfile,
+        history: list[ChatMessage] | None = None,
+    ):
+        """
+        Streaming version of chat(). Yields events:
+          ('sources', list[Article])  — once, before first token
+          ('token',   str)            — one per streamed chunk
+          ('done',    TokenUsage)     — once, at end
+        """
+        history = history or []
+        results = self._store.retrieve(
+            query=query,
+            top_k=settings.retrieval_top_k,
+            topic_filter=user.topic_tags if user.topic_tags else None,
+        )
+        retrieved_articles = [article for article, _score in results]
+
+        yield "sources", retrieved_articles
+
+        trimmed_history = self._trim_history(history, max_turns=6)
+        messages = build_chat_messages(query, retrieved_articles, trimmed_history)
+
+        for text, usage in self._llm.stream_complete(
+            system=CHATBOT_SYSTEM_PROMPT,
+            messages=messages,
+            max_tokens=settings.max_tokens_chat,
+        ):
+            if text:
+                yield "token", text
+            if usage is not None:
+                yield "done", usage
 
     @staticmethod
     def _trim_history(history: list[ChatMessage], max_turns: int) -> list[dict]:

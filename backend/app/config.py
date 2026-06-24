@@ -31,10 +31,24 @@ class Settings(BaseSettings):
     env: str = "dev"
 
     # ─── Database ─────────────────────────────────────────────────────────
-    # SQLAlchemy-style URL. Defaults to a local SQLite file so the app boots
-    # with zero infra. In production we point at Neon (free Postgres + pgvector):
-    #   postgresql+psycopg://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
-    database_url: str = "sqlite:///./dev.db"
+    # SQLAlchemy-style Postgres URL. The default targets the docker-compose
+    # service at the repo root (`docker compose up postgres`). Override in
+    # prod via DATABASE_URL — Azure Postgres Flexible Server, Neon, etc.
+    #
+    # Azure example (note `sslmode=require` and the `azuredb` query param for
+    # managed identity if used):
+    #   postgresql+psycopg://user:pass@host.postgres.database.azure.com:5432/db?sslmode=require
+    #
+    # pgvector must be enabled — on Azure that means adding `vector` to the
+    # azure.extensions server parameter; on local Docker it ships in the
+    # pgvector/pgvector image; on Neon it's pre-enabled.
+    database_url: str = "postgresql+psycopg://mai:mai@localhost:5432/mai_news"
+
+    # Dimensionality of the embeddings stored in `articles.embedding`. Must
+    # match the sentence-transformers model the vector store uses (default
+    # `all-MiniLM-L6-v2` produces 384-dim vectors). Change both together.
+    embedding_dim: int = 384
+    embedding_model: str = "all-MiniLM-L6-v2"
 
     # ─── JWT (our own session token; see docs/auth.md §4) ─────────────────
     # HS256 + a symmetric secret. In production the secret lives in the
@@ -47,16 +61,25 @@ class Settings(BaseSettings):
     # Access token lifetime in minutes. Matches docs/auth.md §4 (30 min).
     jwt_ttl_minutes: int = 30
 
-    # ─── Microsoft Entra ID (OAuth identity provider) ─────────────────────
-    # Populate from the App Registration in your Entra tenant. A free
-    # standalone tenant (no Azure subscription, no card) created from
-    # entra.microsoft.com is sufficient — see .env.example for the setup
-    # steps. If left blank, /auth/login + /auth/callback will fail; use
-    # /auth/dev-login instead for local development.
+    # ─── Microsoft Entra ID (OAuth identity provider — primary) ───────────
+    # The App Registration is created in a personal Microsoft tenant
+    # because the deployment subscription's IE tenant blocks student
+    # accounts from registering apps. Setting `entra_tenant_id` to
+    # `common` puts MSAL in multi-tenant mode — tokens from ANY Entra
+    # tenant (including @student.ie.edu accounts) are accepted, so users
+    # don't need to be in your personal tenant to sign in.
     entra_tenant_id: str = ""
     entra_client_id: str = ""
     entra_client_secret: str = ""
     entra_redirect_uri: str = "http://localhost:8000/api/v1/auth/callback"
+
+    # ─── Google OAuth (alternative provider, currently unused) ────────────
+    # See app/auth/google.py — wired but not imported by the auth router.
+    # Re-enable by swapping `from app.auth import entra as oauth` to
+    # `from app.auth import google as oauth` in routers/auth.py.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    oauth_redirect_uri: str = "http://localhost:8000/api/v1/auth/callback"
 
     # ─── Frontend ─────────────────────────────────────────────────────────
     # Where /auth/callback redirects the browser back to after a successful
@@ -87,9 +110,17 @@ class Settings(BaseSettings):
     openai_model_small: str = "gpt-4o-mini"
     openai_model_large: str = "gpt-4o"
 
-    # ─── Email (Resend — see docs/local_stack.md §4 C11) ──────────────────
-    # 3,000 emails/month free tier. The sender domain must be verified in
-    # the Resend dashboard before any real delivery works.
+    # ─── Email (Azure Communication Services) ─────────────────────────────
+    # Connection string + sender address come from the
+    # Microsoft.Communication/communicationServices resource (Bicep) and
+    # its Azure Managed Domain. The Azure Managed Domain provisions a
+    # `DoNotReply@<random>.azurecomm.net` sender automatically — switch to
+    # a custom-verified domain later for branded mail.
+    acs_connection_string: str = ""
+    acs_sender_address: str = ""
+
+    # Legacy Resend settings (now unused — kept so existing .env files
+    # don't fail validation; safe to delete once everything is on ACS).
     resend_api_key: str = ""
     resend_from: str = "Tech Intel News <noreply@example.com>"
 
