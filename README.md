@@ -1,232 +1,204 @@
-# MAI News — Microsoft AI Capstone
+# MAI News
 
-AI-powered tech intelligence platform that ingests news from 54 sources, deduplicates and indexes articles semantically, and delivers personalized newsletters and a RAG-powered chat interface — tailored by role, region, and interests.
+AI-powered tech intelligence platform for IE × Microsoft AI/ML Engineering Capstone 2026.
 
----
-
-## Architecture
-
-```
-sources.json (54 RSS feeds, canonical source list)
-      │
-      ▼
-data_engineering/          ← ingestion & tag discovery
-  rss_fetcher.py           — incremental RSS polling with per-source watermarks
-  tag_discovery.py         — NER + BERTopic topic clustering
-  sources.py               — feed list used by the DE scripts
-      │
-      ▼ Article dicts
-llm_engineering/           ← AI/ML pipeline
-  src/ingestion/           — async RSS fetcher + semantic deduplicator
-  src/rag/                 — ChromaDB vector store (all-MiniLM-L6-v2 embeddings)
-  src/personalization/     — weighted ranking (semantic + category + recency)
-  src/llm/                 — Claude/GPT newsletter generator + RAG chatbot
-  src/pipeline.py          — end-to-end orchestration entry point
-      │
-      ▼ NewsletterDigest / ChatResponse
-backend/                   ← API layer (coming soon)
-      │
-      ▼ JSON
-frontend/                  ← Next.js React UI
-  src/components/          — chat, news cards, preferences wizard, auth
-```
+Ingests articles from 40+ curated RSS sources, deduplicates and indexes them with pgvector embeddings, and delivers a RAG-powered chat interface personalised by role, region, and topic interests.
 
 ---
 
-## Modules
+## Stack
 
-### `data_engineering/`
-
-Handles raw ingestion from RSS feeds.
-
-| File | Purpose |
+| Layer | Technology |
 |---|---|
-| `sources.py` | Feed list (25 sources, subset of `sources.json`) |
-| `rss_fetcher.py` | Incremental poller — persists watermarks to `fetch_state.json` |
-| `tag_discovery.py` | NER (spaCy) + topic clustering (BERTopic) across all feeds |
-| `tag_discovery_report.md` | Latest discovery run — 802 articles, 22 sources |
-
-**Run the fetcher:**
-```bash
-cd data_engineering
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-python rss_fetcher.py
-```
-
-**Run tag discovery** (takes 2–3 min, downloads models on first run):
-```bash
-python tag_discovery.py   # writes tag_discovery_report.md
-```
+| Frontend | Next.js 15 + React 19 + Tailwind (port 3001) |
+| Backend API | FastAPI + SQLAlchemy + pgvector (port 8000, Docker) |
+| Database | Postgres 16 + pgvector (`mai-news-postgres`) |
+| LLM | OpenAI GPT-4o |
+| Embeddings | `all-MiniLM-L6-v2` 384-dim via sentence-transformers |
+| Auth | Passwordless magic-link + `dev-login` shortcut for local dev |
+| Deploy target | Docker locally · Azure Container Apps (backend) · Azure Storage static website (frontend) |
 
 ---
 
-### `llm_engineering/`
+## Prerequisites
 
-End-to-end AI pipeline: fetch → deduplicate → embed → rank → generate.
-
-**Setup:**
-```bash
-cd llm_engineering
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # then fill in your API keys
-```
-
-**Run the full pipeline for a test user:**
-```python
-import asyncio
-from src.pipeline import NewsPipeline
-from src.models import UserProfile, TechCategory, TonePreference
-
-user = UserProfile(
-    user_id="u1",
-    name="Ada Lovelace",
-    email="ada@microsoft.com",
-    role="ML Engineer",
-    interests=[TechCategory.AI_ML, TechCategory.CLOUD],
-    companies_to_track=["OpenAI", "Microsoft", "Google"],
-    tone=TonePreference.TECHNICAL,
-)
-
-pipeline = NewsPipeline()
-digest = asyncio.run(pipeline.run_for_user(user))
-print(digest.intro)
-for item in digest.articles:
-    print(f"[{item.rank}] {item.article.title}")
-    print(item.summary)
-```
-
-**Pipeline stages:**
-
-| Stage | File | What it does |
-|---|---|---|
-| Fetch | `src/ingestion/fetcher.py` | Async RSS polling, watermark state, full-body fetch for paywalled excerpts |
-| Dedup | `src/ingestion/deduplicator.py` | URL-hash + cosine similarity clustering (threshold 0.88) |
-| Index | `src/rag/vector_store.py` | ChromaDB with `all-MiniLM-L6-v2` embeddings, skip-re-embed on existing docs |
-| Rank | `src/personalization/ranker.py` | Weighted score: semantic (35%) + category (25%) + company mention (20%) + recency (10%) + source quality (10%) |
-| Generate | `src/llm/newsletter.py` | Claude/GPT newsletter with prompt caching, per-user tone, token cost tracking |
-| Chat | `src/llm/chatbot.py` | RAG chatbot — retrieves relevant articles, cites sources |
-
-**Consuming data_engineering output:**
-
-If you have article dicts from `data_engineering/rss_fetcher.py`, convert them directly:
-
-```python
-from src.ingestion.fetcher import article_from_de_dict
-
-raw = {"url": "...", "title": "...", "summary": "...", "source_id": "techcrunch", "pub_date": "2026-05-24T10:00:00+00:00"}
-article = article_from_de_dict(raw)   # returns Article | None
-```
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Node 20+
+- An OpenAI API key (each team member uses their own)
 
 ---
 
-### `frontend/`
+## Local setup
 
-Next.js + Tailwind UI. Standalone prototype runs without a build step.
+### 1. Clone and configure
 
-**Quick start (no build):**
-1. Open `frontend/index.html` with [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) in VS Code
-2. Browser opens at `http://127.0.0.1:5500`
+```bash
+git clone <repo-url>
+cd Microsoft-AI-News
 
-**Full dev server:**
+cp backend/.env.example backend/.env
+# Open backend/.env and set OPENAI_API_KEY to your own key.
+# Everything else is pre-filled for local dev — leave it as-is.
+```
+
+### 2. Start Postgres + API
+
+```bash
+docker compose up -d
+```
+
+First time or after any Python/dependency change:
+
+```bash
+docker compose up --build -d
+```
+
+Tables and seed data (tags, sources) are created automatically on first boot.
+
+Verify it's healthy:
+
+```bash
+curl http://localhost:8000/api/v1/health/ready
+# → {"status":"ok","checks":{"db":"ok"}}
+```
+
+### 3. Ingest articles
+
+Pulls from all RSS sources, deduplicates, embeds, and writes to pgvector:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/internal/run-ingest \
+  -H "Authorization: Bearer local-dev-test-secret-123"
+# → {"fetched": 427, "unique": 381, "indexed": 381}
+```
+
+Only needed on first run or to refresh stale data. The DB persists across `docker compose` restarts.
+
+### 4. Start the frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-**Auth:** Currently mocked (Microsoft + Google SSO dialogs). Wire to real Entra ID via `@azure/msal-browser` — see the auth section in the component docs.
+Opens at **http://localhost:3001** (falls back to 3000 if 3001 is taken).
 
-**User shape** (stored in `localStorage` under `mai_user`):
-```ts
-{
-  name: string,
-  email: string,       // @microsoft.com enforced
-  department: string,
-  region: "na" | "eu" | "china" | "apac" | "india" | "latam" | "mea",
-  signedInAt: number
-}
+### 5. Sign in
+
+Click **Sign in** — any email/password works in dev mode. The `dev-login` endpoint creates a fixed test user (`dev.user@microsoft.com`) and returns a JWT. No real credentials needed.
+
+---
+
+## What is built and working
+
+| Feature | Status |
+|---|---|
+| Dev login (any email/password) | ✅ |
+| SSE streaming chat with GPT-4o | ✅ |
+| RAG retrieval (pgvector cosine similarity, top 8 chunks) | ✅ |
+| Topic filtering in RAG from user preferences | ✅ |
+| Citations returned alongside streamed response | ✅ |
+| User preferences (role, region, topics, tone, depth) | ✅ |
+| Dashboard with today's top articles | ✅ |
+| Dashboard filters by user topic preferences | ✅ |
+| Clicking article → chat "Tell me more about {title}" | ✅ |
+| General chat sessions | ✅ |
+| Folder-based chat threads (named containers) | ✅ |
+| Save / unsave articles from chat cards | ✅ |
+| Saved articles view | ✅ |
+| RSS ingestion pipeline (watermark-based, incremental) | ✅ |
+| Deduplication (URL-hash + semantic similarity 0.88) | ✅ |
+| Multi-dimension article tagging (topic/business/region/role) | ✅ |
+| Internal ingest endpoint (`POST /internal/run-ingest`) | ✅ |
+| Internal digest endpoint (`POST /internal/run-digest-worker`) | ✅ |
+
+---
+
+## Architecture
+
+```
+frontend/ (Next.js, port 3001)
+  src/components/        — App, AuthGate, chat/*, dashboard/*, news/*, saved/*
+  src/lib/api.ts         — typed fetch + SSE client
+        │
+        │ HTTP / SSE
+        ▼
+backend/app/ (FastAPI, port 8000)
+  routers/               — sessions, articles, auth, me, internal, saved, folders
+  integrations/          — llm_bridge (adapts pipeline to API layer)
+  workers/               — ingest_worker, digest_worker
+        │
+        │ Python imports
+        ▼
+llm_engineering/src/
+  ingestion/             — RSSFetcher, ArticleDeduplicator, ArticleVectorStore
+  llm/                   — chatbot (RAG), client, prompts
+  config/settings.py     — pydantic-settings (reads backend/.env)
+        │
+        │ SQL + pgvector
+        ▼
+Postgres 16 + pgvector (port 5432, Docker)
 ```
 
 ---
 
-## Sources & Tag Taxonomy
+## Key API endpoints
 
-All 54 RSS sources live in **`sources.json`** at the repo root — the single source of truth consumed by both `data_engineering` and `llm_engineering`.
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/auth/dev-login` | Dev login — returns JWT |
+| `GET` | `/api/v1/health/ready` | Health check |
+| `GET/PUT` | `/api/v1/me/preferences` | Read / write user preferences |
+| `GET` | `/api/v1/articles` | List articles (supports `?topics=ai&limit=50`) |
+| `POST` | `/api/v1/me/sessions` | Create chat session |
+| `POST` | `/api/v1/me/sessions/{id}/messages` | Send message (SSE stream) |
+| `POST` | `/api/v1/internal/run-ingest` | Trigger RSS ingest (requires `WORKER_SHARED_SECRET`) |
+| `POST` | `/api/v1/internal/run-digest-worker` | Trigger email digest (requires `WORKER_SHARED_SECRET`) |
 
-**Scrape tiers:**
-- `breaking` — checked every 60 min (TechCrunch, MIT TR, Bloomberg, arXiv, …)
-- `standard` — every 360 min (Wired, Ars Technica, Politico, …)
-- `daily` — once per day (regional, government sources)
-
-**Tag dimensions** (used by the preferences wizard and ranking):
-
-| Dimension | Tags |
-|---|---|
-| Topic | AI & ML, Cybersecurity, Cloud & Infrastructure, Software Development, Hardware & Chips, Data & Privacy, Quantum Computing, Robotics, Fintech, Health & Biotech, Clean Tech, Space, Metaverse & XR |
-| Business | M&A & Funding, IPO & Markets, Big Tech, Startups & Venture, Layoffs & Hiring, Earnings |
-| Regulation | AI Regulation, GDPR/DPDP/LGPD, Antitrust, Export Controls, Digital Infrastructure Policy, Cybersecurity Policy, Platform Regulation |
-| Region | North America, Europe, Greater China, Asia Pacific, India, Latin America, Middle East & Africa |
-| Role | Engineers, Business & Sales, Legal & Compliance, Executives, Researchers |
+Interactive docs at **http://localhost:8000/docs**.
 
 ---
 
 ## Environment variables
 
-Copy `.env.example` → `.env` in the repo root (or in `llm_engineering/` when running standalone). **Never commit `.env`.**
+All config lives in `backend/.env`. Copy from `backend/.env.example`.
 
-| Variable | Required | Description |
+| Variable | Local default | Notes |
 |---|---|---|
-| `LLM_PROVIDER` | yes | `anthropic` or `openai` |
-| `ANTHROPIC_API_KEY` | if using Claude | Claude API key |
-| `OPENAI_API_KEY` | if using GPT | OpenAI API key |
-| `TAVILY_API_KEY` | optional | Real-time news search fallback |
-| `CHROMA_PERSIST_DIR` | no | Vector store path (default `./data/chroma_db`) |
-| `SMTP_*` | optional | Gmail SMTP for email delivery |
+| `OPENAI_API_KEY` | — | **Required. Your own key.** |
+| `DATABASE_URL` | pre-filled | Points to Docker Postgres |
+| `ENV` | `dev` | `dev` enables dev-login and relaxed CORS |
+| `JWT_SECRET` | `dev-only-change-me-in-prod` | Change in prod |
+| `WORKER_SHARED_SECRET` | `local-dev-test-secret-123` | For local ingest/digest calls |
+| `ENTRA_*` | blank | Leave blank — dev-login works without OAuth |
+| `ACS_*` / `RESEND_*` | blank | Leave blank — emails skipped gracefully |
 
 ---
 
-## Docker
+## Useful commands
 
 ```bash
-docker compose up        # starts all services
-docker compose up --build   # rebuild after dependency changes
+# Tail API logs
+docker logs mai-news-api -f
+
+# Rebuild API after Python/dependency changes
+docker compose up --build api -d
+
+# Stop everything (keeps DB data)
+docker compose down
+
+# Wipe DB and start fresh
+docker compose down -v && docker compose up -d
 ```
 
 ---
 
-## Repo structure
+## Azure deployment notes
 
-```
-Microsoft-AI-News/
-├── sources.json              # canonical feed registry (54 sources)
-├── .env.example              # environment variable template
-├── docker-compose.yaml
-├── data_engineering/
-│   ├── sources.py            # feed list for DE scripts
-│   ├── rss_fetcher.py        # incremental RSS ingestion
-│   ├── tag_discovery.py      # NER + BERTopic pipeline
-│   └── requirements.txt
-├── llm_engineering/
-│   ├── src/
-│   │   ├── models.py         # Article, UserProfile, NewsletterDigest, …
-│   │   ├── pipeline.py       # orchestration entry point
-│   │   ├── ingestion/        # fetcher + deduplicator + source registry
-│   │   ├── rag/              # ChromaDB vector store
-│   │   ├── personalization/  # ranked article scoring
-│   │   └── llm/              # newsletter generator + chatbot + prompts
-│   ├── config/
-│   │   └── settings.py       # pydantic-settings config
-│   ├── tests/
-│   ├── scripts/
-│   └── requirements.txt
-├── backend/                  # API layer (coming soon)
-└── frontend/
-    ├── index.html            # standalone prototype (no build needed)
-    ├── src/components/       # React components
-    └── package.json
-```
+- Restricted to **francecentral** or **swedencentral** regions.
+- **Azure Static Web Apps is not available** in those regions — use **Storage static website** for the frontend instead.
+- Backend targets Azure Container Apps.
 
 ---
 

@@ -27,9 +27,12 @@ identical session JWTs and provision identical User rows, so frontend
 code doesn't have to care which one was used.
 """
 
+import logging
 import secrets
 
 from fastapi import APIRouter, Body, Cookie, Depends, Response, status
+
+log = logging.getLogger(__name__)
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -168,22 +171,29 @@ def request_login_email(body: _EmailRequestIn) -> dict:
     malformed, ACS is misconfigured, or the send fails. This prevents
     attackers from probing which email addresses are users by timing or
     error-code differences. Send failures are logged server-side.
+
+    In dev mode, the response also contains `dev_link` so the team can
+    log in without email delivery configured.
     """
     email = body.email.strip().lower()
-
-    if email_link.is_valid_email(email):
-        token = email_link.generate_login_token(email)
-        login_url = email_link.build_login_url(token)
-        # Best-effort send; return-value not surfaced to the caller.
-        email_link.send_login_email(to_email=email, login_url=login_url)
-
-    return {
+    response: dict = {
         "status": "ok",
         "message": (
             "If an account is associated with this address, a sign-in link "
             "has been sent. Check your inbox."
         ),
     }
+
+    if email_link.is_valid_email(email):
+        token = email_link.generate_login_token(email)
+        login_url = email_link.build_login_url(token)
+        email_link.send_login_email(to_email=email, login_url=login_url)
+
+        if settings.is_dev:
+            response["dev_link"] = login_url
+            log.info("dev magic link for %s → %s", email, login_url)
+
+    return response
 
 
 @router.get("/email/verify")

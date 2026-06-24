@@ -46,6 +46,19 @@ export async function devLogin(): Promise<{ access_token: string; user: ApiUser 
   return res.json()
 }
 
+export async function requestMagicLink(email: string): Promise<{ status: string; message: string; dev_link?: string }> {
+  const res = await fetch(`${API_BASE}/auth/email/request-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.title ?? `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function getMe(): Promise<ApiUser> {
   const res = await apiFetch('/me')
   return res.json()
@@ -81,6 +94,29 @@ export async function listSessions(limit = 30): Promise<ApiSession[]> {
 
 export async function deleteSession(sessionId: string): Promise<void> {
   await apiFetch(`/me/sessions/${sessionId}`, { method: 'DELETE' })
+}
+
+export interface MessageOut {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  citations: {
+    article_id: string
+    title: string
+    source: string
+    url: string
+    published_at: string
+  }[]
+  created_at: string
+}
+
+export interface ApiSessionWithMessages extends ApiSession {
+  messages: MessageOut[]
+}
+
+export async function getSession(sessionId: string): Promise<ApiSessionWithMessages> {
+  const res = await apiFetch(`/me/sessions/${sessionId}`)
+  return res.json()
 }
 
 // ─── SSE streaming ────────────────────────────────────────────────────────
@@ -191,5 +227,94 @@ export interface ApiTag { slug: string; label: string }
 
 export async function getTags(): Promise<Record<string, ApiTag[]>> {
   const res = await apiFetch('/tags')
+  return res.json()
+}
+
+// ─── Articles ─────────────────────────────────────────────────────────────
+
+export interface ApiArticle {
+  id: string
+  title: string
+  source: string
+  url: string
+  published_at: string
+  author: string | null
+  extract: string | null
+  topics: string[]
+}
+
+// ─── Folders ──────────────────────────────────────────────────────────────
+
+export interface ApiFolderThread {
+  id: string
+  title: string | null
+  time: string
+}
+
+export interface ApiFolder {
+  id: string
+  name: string
+  topics: string[]
+  frequency: string
+  keywords: string[]
+  threads: ApiFolderThread[]
+}
+
+export async function getFolders(): Promise<ApiFolder[]> {
+  const res = await apiFetch('/me/folders')
+  return res.json()
+}
+
+export async function createFolder(body: {
+  name: string
+  topics?: string[]
+  frequency?: string
+  keywords?: string[]
+}): Promise<ApiFolder> {
+  const res = await apiFetch('/me/folders', { method: 'POST', body: JSON.stringify(body) })
+  return res.json()
+}
+
+export async function deleteFolder(folderId: string): Promise<void> {
+  await apiFetch(`/me/folders/${folderId}`, { method: 'DELETE' })
+}
+
+export async function createFolderThread(folderId: string, title?: string): Promise<ApiFolderThread> {
+  const res = await apiFetch(`/me/folders/${folderId}/threads`, {
+    method: 'POST',
+    body: JSON.stringify({ title: title ?? null }),
+  })
+  return res.json()
+}
+
+export async function deleteFolderThread(folderId: string, sessionId: string): Promise<void> {
+  await apiFetch(`/me/folders/${folderId}/threads/${sessionId}`, { method: 'DELETE' })
+}
+
+// ─── Saved articles ───────────────────────────────────────────────────────
+
+export async function getSaved(): Promise<ApiArticle[]> {
+  const res = await apiFetch('/me/saved')
+  return res.json()
+}
+
+export async function saveArticle(articleId: string): Promise<ApiArticle> {
+  const res = await apiFetch('/me/saved', {
+    method: 'POST',
+    body: JSON.stringify({ article_id: articleId }),
+  })
+  return res.json()
+}
+
+export async function unsaveArticle(articleId: string): Promise<void> {
+  await apiFetch(`/me/saved/${articleId}`, { method: 'DELETE' })
+}
+
+export async function listArticles(params?: { topics?: string[]; limit?: number }): Promise<ApiArticle[]> {
+  const qs = new URLSearchParams()
+  if (params?.topics?.length) qs.set('topics', params.topics.join(','))
+  if (params?.limit) qs.set('limit', String(params.limit))
+  const query = qs.toString()
+  const res = await apiFetch(`/articles${query ? `?${query}` : ''}`)
   return res.json()
 }

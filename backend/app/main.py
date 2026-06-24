@@ -33,6 +33,8 @@ from app.routers import digests as digests_router
 from app.routers import health as health_router
 from app.routers import internal as internal_router
 from app.routers import me as me_router
+from app.routers import folders as folders_router
+from app.routers import saved as saved_router
 from app.routers import sessions as sessions_router
 from app.routers import sources as sources_router
 from app.routers import tags as tags_router
@@ -97,9 +99,11 @@ app = FastAPI(
 # Prod: only the origins in ALLOWED_ORIGINS env var (the Vercel deployment URL).
 _DEV_ORIGINS = [
     "http://localhost:3000",   # Next.js default
+    "http://localhost:3001",   # Next.js fallback when 3000 is taken
     "http://localhost:5173",   # Vite default
     "http://localhost:4173",   # Vite preview
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
     "http://127.0.0.1:5173",
 ]
 _origins = _DEV_ORIGINS if settings.is_dev else settings.allowed_origins
@@ -163,5 +167,7 @@ app.include_router(tags_router.router, prefix=API_PREFIX)
 app.include_router(sources_router.router, prefix=API_PREFIX)
 app.include_router(articles_router.router, prefix=API_PREFIX)
 app.include_router(digests_router.router, prefix=API_PREFIX)
+app.include_router(folders_router.router, prefix=API_PREFIX)
+app.include_router(saved_router.router, prefix=API_PREFIX)
 app.include_router(sessions_router.router, prefix=API_PREFIX)
 app.include_router(internal_router.router, prefix=API_PREFIX)

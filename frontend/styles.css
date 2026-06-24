@@ -1,4 +1,8 @@
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.15) transparent; }
+*::-webkit-scrollbar { width: 4px; height: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 2px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: 'Inter Tight', system-ui, -apple-system, Segoe UI, sans-serif;
@@ -1442,3 +1446,42 @@ kbd {
   .topbar, .canvas, .composer-wrap { padding-left: 18px; padding-right: 18px; }
   .hero { margin-top: 6vh; }
 }
+
+/* ---------- Sidebar nav sections ---------- */
+.snav-section { margin-bottom: 2px; }
+.snav-hd { display: flex; align-items: center; gap: 8px; width: 100%; background: transparent; border: 0; padding: 7px 10px; border-radius: 9px; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: background 0.13s; text-align: left; }
+.snav-hd:hover { background: rgba(255,253,247,0.4); }
+.snav-icon { display: flex; align-items: center; flex-shrink: 0; }
+.snav-label { flex: 1; }
+.snav-body { padding: 2px 0 6px; }
+.snav-new-btn { display: flex; align-items: center; gap: 7px; width: 100%; background: transparent; border: 0; padding: 7px 10px; font-size: 12px; cursor: pointer; border-radius: 8px; transition: background 0.13s; margin-top: 1px; }
+.snav-new-btn:hover { background: rgba(255,253,247,0.4); }
+.t-context { font-size: 10px; margin-top: 1px; opacity: 0.55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Home / BriefingPreview ---------- */
+.home-wrap { max-width: 560px; margin: 0 auto; padding: 8vh 8px 48px; }
+.home-date { font-size: 12px; letter-spacing: 0.04em; margin: 0 0 6px; }
+.home-greeting { font-size: 26px; font-weight: 400; line-height: 1.2; margin: 0 0 4px; }
+.home-sub { font-size: 12px; margin: 0 0 28px; }
+.home-articles { list-style: none; margin: 0; padding: 0; }
+.home-articles li:first-child .home-article { border-top: 1px solid rgba(0,0,0,0.07); }
+.home-article { display: flex; flex-direction: column; gap: 3px; padding: 11px 0; border-bottom: 1px solid rgba(0,0,0,0.07); cursor: pointer; background: transparent; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left; transition: opacity 0.15s; }
+.home-article:hover { opacity: 0.65; }
+.home-article-meta { font-size: 11px; letter-spacing: 0.03em; }
+.home-article-title { font-size: 14px; font-weight: 450; line-height: 1.4; }
+
+/* ---------- Cards list ---------- */
+.cards-list { display: flex; flex-direction: column; margin-top: 10px; }
+.nitem { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-bottom: 1px solid rgba(0,0,0,0.07); background: transparent; border-left: 0; border-right: 0; border-top: 0; text-align: left; cursor: pointer; transition: opacity 0.15s; width: 100%; }
+.nitem:first-child { border-top: 1px solid rgba(0,0,0,0.07); }
+.nitem:hover { opacity: 0.65; }
+.nitem-meta { font-size: 11px; letter-spacing: 0.03em; }
+.nitem-title { font-size: 13.5px; font-weight: 450; line-height: 1.4; }
+
+/* ---------- Briefing in thread ---------- */
+.brief-header { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 6px; }
+.brief-greeting { font-size: 22px; font-weight: 400; line-height: 1.2; margin: 0 0 16px; }
+.bubble-ai { white-space: normal; }
+
+/* ---------- Icon-only topbar button ---------- */
+.icon-btn { padding: 6px 8px; min-width: 0; }

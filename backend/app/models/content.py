@@ -146,6 +146,27 @@ class Article(Base):
     )
 
 
+class UserSavedArticle(Base):
+    """
+    Bookmark join between a user and an article.
+    Composite PK = (user_id, article_id) → naturally idempotent saves.
+    """
+
+    __tablename__ = "user_saved_articles"
+
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    article_id: Mapped[str] = mapped_column(
+        String, ForeignKey("articles.id", ondelete="CASCADE"), primary_key=True
+    )
+    saved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+
+    article: Mapped["Article"] = relationship()
+
+
 class ArticleTag(Base):
     """
     Article ↔ Tag join, across every taxonomy dimension. DE2 writes these
