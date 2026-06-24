@@ -89,17 +89,6 @@ export interface Tweaks {
   preloadDemo: boolean
 }
 
-export interface ForumPost {
-  id: string
-  authorName: string
-  title: string
-  content: string
-  status: 'pending' | 'approved'
-  createdAt: string
-  likes: number
-  likedByMe: boolean
-}
-
 export interface MockAccount {
   name: string
   email: string

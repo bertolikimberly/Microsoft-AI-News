@@ -319,38 +319,34 @@ def post_message(
 
         yield _sse("turn_start", {"message_id": msg_id})
 
-        # Try to call the real LLM pipeline. If unavailable, fall back to stub.
+        # Stream directly from the LLM pipeline. Fall back to stub if unavailable.
         answer_text = ""
         real_citations: list[dict] = []
         prompt_tokens = 0
         completion_tokens = 0
-        used_stub = False
 
         try:
-            from app.integrations.llm_bridge import chat_reply
-            answer_text, real_citations, prompt_tokens, completion_tokens = chat_reply(
+            from app.integrations.llm_bridge import stream_chat_reply
+            for event in stream_chat_reply(
                 db=db,
                 user=user,
                 prefs=user_prefs,
                 query=user_content,
                 history=history_tuples,
-            )
+            ):
+                if event[0] == "token":
+                    chunk = event[1]
+                    answer_text += chunk
+                    yield _sse("token", {"content": chunk})
+                elif event[0] == "done":
+                    _, real_citations, prompt_tokens, completion_tokens = event
         except Exception as e:
-            # Pipeline unavailable (import failed, missing API key, vector store down, etc.)
-            # Fall back to stub response so the frontend always gets a complete stream.
-            log.warning(f"chat_reply unavailable, falling back to stub: {type(e).__name__}: {e}")
+            log.warning(f"stream_chat_reply failed, falling back to stub: {type(e).__name__}: {e}")
             answer_text = "".join(_stub_reply_tokens(user_content))
-            used_stub = True
-
-        # Stream the answer as tokens. Real answer: split by words. Stub: re-chunk.
-        if not used_stub:
-            for word in answer_text.split():
-                yield _sse("token", {"content": word + " "})
-        else:
             for tok in _stub_reply_tokens(user_content):
                 yield _sse("token", {"content": tok})
 
-        # Stream real citations from RAG retrieval
+        # Emit citations after the answer text
         citations_for_db: list[dict] = []
         for cite in real_citations:
             yield _sse("citation", {

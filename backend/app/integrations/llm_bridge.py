@@ -274,3 +274,72 @@ def chat_reply(
     prompt_tokens = getattr(response.token_cost, "input_tokens", 0) or 0
     completion_tokens = getattr(response.token_cost, "output_tokens", 0) or 0
     return response.answer, citations, prompt_tokens, completion_tokens
+
+
+def stream_chat_reply(
+    db: Session,
+    user: UserORM,
+    prefs: PreferencesORM,
+    query: str,
+    history: list[tuple[str, str]],
+):
+    """
+    Streaming chat. Yields events for the SSE handler:
+
+        ('token',  str)                                  — each text chunk
+        ('done',   citations, prompt_tokens, comp_tokens) — once, at end
+
+    Raises RuntimeError on import / construction failure so the caller
+    can fall back to the stub stream.
+    """
+    from app.integrations import bootstrap
+
+    try:
+        bootstrap.ensure_pipeline_importable()
+        from src.llm.chatbot import Chatbot
+        from src.models import ChatMessage
+        from app.rag.vector_store import ArticleVectorStore
+    except ImportError as exc:
+        raise RuntimeError(f"chat pipeline unavailable: {exc}") from exc
+
+    chatbot = Chatbot(vector_store=ArticleVectorStore())
+    profile = user_to_profile(user, prefs)
+    chat_history = [ChatMessage(role=r, content=c) for r, c in history]
+
+    sources = []
+    for event_type, payload in chatbot.stream_chat(query=query, user=profile, history=chat_history):
+        if event_type == "sources":
+            sources = payload
+        elif event_type == "token":
+            yield "token", payload
+        elif event_type == "done":
+            usage = payload
+            citations = _resolve_citations(db, sources)
+            prompt_tokens = getattr(usage, "input_tokens", 0) or 0
+            completion_tokens = getattr(usage, "output_tokens", 0) or 0
+            yield "done", citations, prompt_tokens, completion_tokens
+
+
+def _resolve_citations(db: Session, sources: list) -> list[dict]:
+    """Map pipeline source articles to backend ArticleORM rows for citation links."""
+    if not sources:
+        return []
+    urls = [a.url for a in sources if a.url]
+    by_url = {
+        row.url: row
+        for row in db.query(ArticleORM).filter(ArticleORM.url.in_(urls)).all()
+    }
+    citations: list[dict] = []
+    for idx, src in enumerate(sources, start=1):
+        row = by_url.get(src.url)
+        if row is None:
+            continue
+        citations.append({
+            "index": idx,
+            "article_id": row.id,
+            "title": row.title,
+            "source": row.source.name if row.source else "",
+            "url": row.url,
+            "published_at": row.published_at.isoformat() if row.published_at else None,
+        })
+    return citations

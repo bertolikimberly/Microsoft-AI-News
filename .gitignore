@@ -69,6 +69,7 @@ node_modules/
 .next/
 out/
 next-env.d.ts
+*.tsbuildinfo
 
 # ── OS files ───────────────────────────────────────────────────────────────
 .DS_Store
