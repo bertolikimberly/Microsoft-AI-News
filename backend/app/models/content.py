@@ -29,6 +29,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.db.base import Base
@@ -139,6 +140,16 @@ class Article(Base):
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(settings.embedding_dim), nullable=True
     )
+
+    # Compliance + traceability 
+    rss_feed_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    original_language: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # pgvector embedding (384 dims = all-MiniLM-L6-v2)
+    # Nullable so an article can exist before the embedding step runs.
+    # The ivfflat index is created out-of-band — see db/init.sql.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
 
     source: Mapped["Source"] = relationship()
     tags: Mapped[list["ArticleTag"]] = relationship(
