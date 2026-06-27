@@ -87,7 +87,8 @@
       "Middle East & Africa",
       "Global"
     ],
-    "notes": "v2.0: removed paywalled sources (Bloomberg, Economist, Sifted) and EU-heavy 'The Local' country feeds. Added APAC/China/India/LATAM/MEA regional coverage. GDELT covers gaps where dedicated English sources are sparse. 'region' = where the source is based/focused; 'region_tags' = Microsoft regions the content is most relevant to."
+    "notes": "v2.0: removed paywalled sources (Bloomberg, Economist, Sifted) and EU-heavy 'The Local' country feeds. Added APAC/China/India/LATAM/MEA regional coverage. GDELT covers gaps where dedicated English sources are sparse. 'region' = where the source is based/focused; 'region_tags' = Microsoft regions the content is most relevant to.",
+    "enabled_field": "Set enabled=false to soft-disable a source: it stays in the registry (watermarks preserved) but the fetcher and DB-sync skip it. Preferred over deletion."
   },
   "sources": [
     {
@@ -114,7 +115,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Deep long-form tech journalism."
+      "notes": "Deep long-form tech journalism.",
+      "enabled": true
     },
     {
       "id": "techcrunch",
@@ -141,7 +143,8 @@
         "M&A & Funding"
       ],
       "default_regulation_tags": [],
-      "notes": "Startup and tech industry news."
+      "notes": "Startup and tech industry news.",
+      "enabled": true
     },
     {
       "id": "ars_technica",
@@ -166,7 +169,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Technical depth, good for engineers."
+      "notes": "Technical depth, good for engineers.",
+      "enabled": true
     },
     {
       "id": "the_verge",
@@ -191,7 +195,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Consumer tech. RSS gives excerpts - needs full fetch."
+      "notes": "Consumer tech. RSS gives excerpts - needs full fetch.",
+      "enabled": true
     },
     {
       "id": "geekwire",
@@ -217,7 +222,8 @@
         "Big Tech (FAANG+Microsoft)"
       ],
       "default_regulation_tags": [],
-      "notes": "Seattle/Microsoft-region tech business news."
+      "notes": "Seattle/Microsoft-region tech business news.",
+      "enabled": true
     },
     {
       "id": "rest_of_world",
@@ -245,7 +251,8 @@
         "Startups & Venture"
       ],
       "default_regulation_tags": [],
-      "notes": "Tech impact outside the West - key for non-US/EU regions."
+      "notes": "Tech impact outside the West - key for non-US/EU regions.",
+      "enabled": true
     },
     {
       "id": "reuters_tech",
@@ -272,7 +279,8 @@
         "Earnings & Revenue"
       ],
       "default_regulation_tags": [],
-      "notes": "Wire service - high-trust breaking news."
+      "notes": "Wire service - high-trust breaking news.",
+      "enabled": true
     },
     {
       "id": "tech_policy_press",
@@ -298,7 +306,8 @@
         "Platform Regulation",
         "Data Protection (GDPR, DPDP, LGPD)"
       ],
-      "notes": "Tech and democracy analysis."
+      "notes": "Tech and democracy analysis.",
+      "enabled": true
     },
     {
       "id": "eu_press_corner",
@@ -323,7 +332,8 @@
         "Antitrust & Competition",
         "Data Protection (GDPR, DPDP, LGPD)"
       ],
-      "notes": "Official EU regulatory source - ground EU policy claims here."
+      "notes": "Official EU regulatory source - ground EU policy claims here.",
+      "enabled": true
     },
     {
       "id": "govtech",
@@ -347,7 +357,8 @@
         "Digital Infrastructure Policy",
         "Cybersecurity Policy"
       ],
-      "notes": "US public-sector technology and policy."
+      "notes": "US public-sector technology and policy.",
+      "enabled": true
     },
     {
       "id": "politico_tech",
@@ -373,7 +384,8 @@
         "Antitrust & Competition",
         "Platform Regulation"
       ],
-      "notes": "US tech policy and politics."
+      "notes": "US tech policy and politics.",
+      "enabled": true
     },
     {
       "id": "google_blog",
@@ -397,7 +409,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Official Google product/AI announcements."
+      "notes": "Official Google product/AI announcements.",
+      "enabled": true
     },
     {
       "id": "aws_news",
@@ -420,7 +433,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "AWS service launches - competitor intel."
+      "notes": "AWS service launches - competitor intel.",
+      "enabled": true
     },
     {
       "id": "openai_blog",
@@ -443,7 +457,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "OpenAI announcements - key competitor."
+      "notes": "OpenAI announcements - key competitor.",
+      "enabled": true
     },
     {
       "id": "anthropic_blog",
@@ -466,7 +481,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Anthropic announcements - key partner/competitor."
+      "notes": "Anthropic announcements - key partner/competitor.",
+      "enabled": true
     },
     {
       "id": "nvidia_blog",
@@ -490,7 +506,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "GPU/AI hardware - supply chain relevance."
+      "notes": "GPU/AI hardware - supply chain relevance.",
+      "enabled": true
     },
     {
       "id": "github_blog",
@@ -513,7 +530,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Developer tools - Microsoft-owned."
+      "notes": "Developer tools - Microsoft-owned.",
+      "enabled": true
     },
     {
       "id": "arxiv_ai",
@@ -536,7 +554,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "AI research preprints - filter by keywords, high volume."
+      "notes": "AI research preprints - filter by keywords, high volume.",
+      "enabled": true
     },
     {
       "id": "arxiv_lg",
@@ -559,7 +578,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "ML research preprints - filter by keywords, high volume."
+      "notes": "ML research preprints - filter by keywords, high volume.",
+      "enabled": true
     },
     {
       "id": "hacker_news",
@@ -583,7 +603,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Community signal - links out, needs full fetch."
+      "notes": "Community signal - links out, needs full fetch.",
+      "enabled": true
     },
     {
       "id": "stat_news",
@@ -606,7 +627,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Health/biotech intersection with AI."
+      "notes": "Health/biotech intersection with AI.",
+      "enabled": true
     },
     {
       "id": "itnews",
@@ -630,7 +652,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Australian enterprise IT."
+      "notes": "Australian enterprise IT.",
+      "enabled": true
     },
     {
       "id": "nhk_world",
@@ -654,7 +677,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Japan/Asia English news."
+      "notes": "Japan/Asia English news.",
+      "enabled": true
     },
     {
       "id": "pandaily",
@@ -679,7 +703,8 @@
         "Startups & Venture"
       ],
       "default_regulation_tags": [],
-      "notes": "China tech in English."
+      "notes": "China tech in English.",
+      "enabled": true
     },
     {
       "id": "xinhua_tech",
@@ -702,7 +727,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "China state news - sci/tech. Note: state-affiliated, weight accordingly."
+      "notes": "China state news - sci/tech. Note: state-affiliated, weight accordingly.",
+      "enabled": true
     },
     {
       "id": "inc42",
@@ -728,7 +754,8 @@
         "M&A & Funding"
       ],
       "default_regulation_tags": [],
-      "notes": "India startup ecosystem."
+      "notes": "India startup ecosystem.",
+      "enabled": true
     },
     {
       "id": "yourstory",
@@ -751,7 +778,8 @@
         "Startups & Venture"
       ],
       "default_regulation_tags": [],
-      "notes": "India startups and entrepreneurship."
+      "notes": "India startups and entrepreneurship.",
+      "enabled": true
     },
     {
       "id": "techlatam",
@@ -774,7 +802,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Latin America tech news."
+      "notes": "Latin America tech news.",
+      "enabled": true
     },
     {
       "id": "agencia_brasil",
@@ -795,7 +824,8 @@
       "default_topic_tags": [],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Brazil public news agency - LGPD/policy. Portuguese - translate."
+      "notes": "Brazil public news agency - LGPD/policy. Portuguese - translate.",
+      "enabled": true
     },
     {
       "id": "disrupt_africa",
@@ -819,7 +849,8 @@
         "M&A & Funding"
       ],
       "default_regulation_tags": [],
-      "notes": "African startup ecosystem."
+      "notes": "African startup ecosystem.",
+      "enabled": true
     },
     {
       "id": "wamda",
@@ -842,7 +873,8 @@
         "Startups & Venture"
       ],
       "default_regulation_tags": [],
-      "notes": "MENA startup/venture news."
+      "notes": "MENA startup/venture news.",
+      "enabled": true
     },
     {
       "id": "euractiv_tech",
@@ -866,7 +898,8 @@
         "AI Regulation",
         "Digital Infrastructure Policy"
       ],
-      "notes": "EU policy news."
+      "notes": "EU policy news.",
+      "enabled": true
     },
     {
       "id": "the_register",
@@ -892,7 +925,8 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "UK enterprise IT, irreverent."
+      "notes": "UK enterprise IT, irreverent.",
+      "enabled": true
     },
     {
       "id": "silicon_republic",
@@ -917,7 +951,8 @@
         "Startups & Venture"
       ],
       "default_regulation_tags": [],
-      "notes": "Irish/EU tech news."
+      "notes": "Irish/EU tech news.",
+      "enabled": true
     },
     {
       "id": "gdelt",
@@ -942,7 +977,8 @@
       "default_topic_tags": [],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "NOT an RSS feed - GDELT DOC 2.0 API. Needs custom client, not feedparser. Covers regions with sparse English sources."
+      "notes": "NOT an RSS feed - GDELT DOC 2.0 API. Needs custom client, not feedparser. Covers regions with sparse English sources.",
+      "enabled": true
     }
   ]
 }
