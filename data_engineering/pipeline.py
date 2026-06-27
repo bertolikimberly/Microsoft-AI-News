@@ -68,7 +68,7 @@ def run() -> dict:
 
 def _run(conn) -> dict:
     # 1. Sync source registry to DB.
-    all_sources = get_all_sources()
+    all_sources = get_all_sources(include_disabled=True)
     sources_written = _writer.upsert_sources(conn, all_sources)
     print(f"[pipeline] sources upserted: {sources_written}")
 
