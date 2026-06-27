@@ -28,6 +28,7 @@ import embedder as _embedder
 import writer as _writer
 from models import ArticleRecord
 from rss_fetcher import fetch_with_state
+from gdelt_fetcher import fetch_gdelt
 from sources import RSS_FEEDS, get_all_sources
 
 
@@ -77,7 +78,13 @@ def _run(conn) -> dict:
 
     # 3. Fetch new RSS entries.
     raw_articles, updated_watermarks = fetch_with_state(RSS_FEEDS, watermarks)
-    print(f"[pipeline] fetched: {len(raw_articles)} raw entries")
+    print(f"[pipeline] fetched (RSS): {len(raw_articles)} raw entries")
+
+    # 3b. Fetch GDELT (regions with sparse RSS coverage). Same dict shape,
+    #     so it merges straight into the RSS list. Watermark stored under 'gdelt'.
+    gdelt_articles, updated_watermarks = fetch_gdelt(updated_watermarks)
+    print(f"[pipeline] fetched (GDELT): {len(gdelt_articles)} raw entries")
+    raw_articles.extend(gdelt_articles)
 
     # 4. Build ArticleRecords, drop malformed entries.
     records = [r for raw in raw_articles if (r := _build_record(raw)) is not None]
