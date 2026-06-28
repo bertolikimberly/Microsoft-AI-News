@@ -42,7 +42,7 @@ def _to_out(article: Article) -> ArticleOut:
 @router.get("", response_model=list[ArticleOut])
 def list_articles(
     topics: str | None = Query(default=None, description="Comma-separated topic slugs"),
-    limit: int = Query(default=8, ge=1, le=50),
+    limit: int = Query(default=24, ge=1, le=100),
     _user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[ArticleOut]:

@@ -2,9 +2,10 @@
 RSS-based news fetcher.
 
 Two-step content pipeline:
-  1. feedparser parses the RSS feed → title, url, published_date, summary/description
-  2. For sources with content_quality="excerpts", httpx + BeautifulSoup fetches the
-     full article body so the RAG embeddings get rich content, not just a teaser.
+  1. feedparser parses the RSS feed → title, url, published_date, excerpt
+  2. For sources with content_quality="excerpts", trafilatura fetches and
+     extracts the full article body — it strips boilerplate (nav, ads, footers)
+     far more reliably than a raw BeautifulSoup paragraph scrape.
 
 arXiv feeds are high-volume — a keyword relevance filter is applied before returning.
 
@@ -18,29 +19,38 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html
 import json
 import os
-import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+import certifi
 import feedparser
-import httpx
+import trafilatura
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.models import Article, UserProfile
-from src.ingestion.source_registry import Source, get_sources_for_user, load_sources
+# feedparser and trafilatura use urllib/httpx which both respect SSL_CERT_FILE.
+# On macOS with Homebrew Python the system trust store isn't wired automatically,
+# so we point both at certifi's bundle at import time.
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+
+from app.pipeline.models import Article, UserProfile
+from app.pipeline.ingestion.source_registry import Source, get_sources_for_user, load_sources
 
 _ARXIV_KEYWORDS = {
     "llm", "large language model", "transformer", "foundation model",
     "generative ai", "diffusion", "neural", "reinforcement learning",
     "multimodal", "agent", "rag", "retrieval", "fine-tun",
+    "model context protocol", "mcp", "tool use", "tool calling",
+    "agentic", "code generation", "code llm", "coding agent",
+    "instruction tuning", "prompt", "chain-of-thought", "reasoning model",
 }
 
-_CONTENT_TAGS = ["p", "h1", "h2", "h3", "li"]
 
 
 def _state_file_path() -> Path:
@@ -125,65 +135,60 @@ def _is_arxiv_relevant(title: str, abstract: str) -> bool:
     return any(kw in text for kw in _ARXIV_KEYWORDS)
 
 
+def _detect_and_translate(text: str, title: str = "") -> tuple[str, str]:
+    """
+    Detect the language of the text and translate to English if non-English.
+    Returns (translated_text, detected_language_code).
+    Falls back to original text on any error.
+    """
+    if not text or len(text) < 40:
+        return text, "en"
+    try:
+        from langdetect import detect, LangDetectException
+        lang = detect(text[:400])
+    except Exception:
+        return text, "unknown"
+
+    if lang == "en":
+        return text, "en"
+
+    try:
+        from deep_translator import GoogleTranslator
+        # Translate up to 4000 chars (API limit per call)
+        translated = GoogleTranslator(source=lang, target="en").translate(text[:4000])
+        return translated or text, lang
+    except Exception:
+        return text, lang
+
+
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
 async def _fetch_full_body(url: str, timeout: float = 10.0) -> str:
+    """
+    Fetch and extract the main article text from a URL using trafilatura.
+    Trafilatura is specifically designed for news article extraction and handles
+    boilerplate removal (nav, ads, footers) far more reliably than BeautifulSoup
+    paragraph scraping.
+    """
     try:
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            follow_redirects=True,
-            headers={"User-Agent": "MAI-News-Bot/1.0 (research project)"},
-        ) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for tag in soup(["script", "style", "nav", "footer", "aside", "header"]):
-                tag.decompose()
-            paragraphs = soup.find_all(_CONTENT_TAGS)
-            text = " ".join(p.get_text(" ", strip=True) for p in paragraphs)
-            return re.sub(r"\s+", " ", text).strip()[:4000]
+        loop = asyncio.get_event_loop()
+        downloaded = await loop.run_in_executor(
+            None,
+            lambda: trafilatura.fetch_url(
+                url,
+                config=trafilatura.settings.use_config(),
+            ),
+        )
+        if not downloaded:
+            return ""
+        text = trafilatura.extract(
+            downloaded,
+            favor_recall=True,
+            include_comments=False,
+            include_tables=False,
+        ) or ""
+        return text[:4000]
     except Exception:
         return ""
-
-
-# ---------------------------------------------------------------------------
-# Adapter: data_engineering raw dict → Article
-# ---------------------------------------------------------------------------
-
-def article_from_de_dict(raw: dict) -> Article | None:
-    """
-    Convert a dict produced by data_engineering/rss_fetcher.py into an Article.
-    Returns None if the dict is missing required fields.
-    """
-    from src.ingestion.source_registry import get_source_by_id
-
-    url = raw.get("url", "")
-    title = raw.get("title", "")
-    if not url or not title:
-        return None
-
-    source = get_source_by_id(raw.get("source_id", ""))
-    source_name = source.name if source else raw.get("source_id", "unknown")
-    source_type = source.source_type if source else "secondary"
-
-    pub_date_raw = raw.get("pub_date", "")
-    try:
-        published_at = datetime.fromisoformat(pub_date_raw)
-    except (ValueError, TypeError):
-        published_at = datetime.now(timezone.utc)
-
-    return Article(
-        id=_make_id(url),
-        url=url,
-        title=title,
-        source=source_name,
-        published_at=published_at,
-        content=raw.get("summary", ""),
-        topic_tags=source.topic_tags if source else [],
-        business_tags=source.business_tags if source else [],
-        regulation_tags=source.regulation_tags if source else [],
-        regions=source.regions if source else [],
-        source_type=source_type,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +221,7 @@ class RSSFetcher:
             if not url:
                 continue
 
-            title = entry.get("title", "No title")
+            title = html.unescape(entry.get("title", "No title"))
             content = _entry_to_text(entry)
             published_at = _parse_date(entry)
 
@@ -227,18 +232,21 @@ class RSSFetcher:
             if source.id.startswith("arxiv") and not _is_arxiv_relevant(title, content):
                 continue
 
+            # Detect language and translate non-English content to English.
+            translated_content, lang = _detect_and_translate(content, title)
             article = Article(
                 id=_make_id(url),
                 url=url,
                 title=title,
                 source=source.name,
                 published_at=published_at,
-                content=content,
+                content=translated_content,
                 topic_tags=source.topic_tags,
                 business_tags=source.business_tags,
                 regulation_tags=source.regulation_tags,
                 regions=source.regions,
                 source_type=source.source_type,
+                original_language=lang,
             )
             articles.append(article)
 
@@ -312,7 +320,7 @@ class RSSFetcher:
         incremental: bool = True,
     ) -> list[Article]:
         """Fetch all sources for a given scrape tier (for scheduled jobs)."""
-        from src.ingestion.source_registry import get_sources_for_tier
+        from app.pipeline.ingestion.source_registry import get_sources_for_tier
         sources = get_sources_for_tier(tier)
 
         state = _load_state([s.id for s in sources]) if incremental else {s.id: None for s in sources}

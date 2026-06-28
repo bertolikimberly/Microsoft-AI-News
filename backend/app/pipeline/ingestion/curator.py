@@ -1,0 +1,136 @@
+"""
+LLM-based article curator.
+
+After deduplication we may have 100-400 raw articles. Before embedding them
+into pgvector, we let the LLM act as an editor: send it a compact list of
+titles + sources and ask it to pick the most newsworthy, diverse subset.
+
+This kills two problems at once:
+  - Low-quality articles (press releases, listicles, thinly-sourced posts)
+    never hit the vector store and never appear in RAG responses.
+  - Thematic redundancy: if five feeds covered the same GPT announcement,
+    the curator picks the best one and drops the rest.
+
+The curator prompt mirrors the "Jefe de Redacción" pattern from the reference
+implementation — a single structured LLM call with a JSON response.
+"""
+from __future__ import annotations
+
+import json
+import logging
+
+from app.pipeline.models import Article, UserProfile
+from app.pipeline.llm.client import LLMClient
+
+log = logging.getLogger(__name__)
+
+_SYSTEM_PROMPT = """You are a senior tech news editor for MAI, an AI-powered intelligence
+platform for Microsoft employees. Your job is to select the most valuable articles
+from a raw feed.
+
+SELECTION CRITERIA (in order of importance):
+1. Genuine news value — actual developments, not opinion or speculation.
+2. Relevance to AI, cloud, enterprise tech, policy, and emerging technology.
+3. Source quality — prefer primary sources (company blogs, official announcements,
+   research papers) and top-tier journalism over aggregators.
+4. Thematic diversity — if five articles cover the same story, pick the best one.
+5. Recency signal — breaking developments beat follow-up commentary.
+
+WHAT TO REJECT:
+- Listicles and "top 10" posts with no real news.
+- Pure opinion pieces with no new facts.
+- Press release reposts (same story, weaker source than another candidate).
+- Off-topic articles that slipped through the RSS filter.
+
+Respond ONLY with a valid JSON object. No prose, no markdown fences."""
+
+_USER_TEMPLATE = """Select the {top_n} most valuable articles from the list below.
+Assign a priority score from 1 (lowest) to 10 (highest).
+
+Return exactly this JSON schema:
+{{
+  "selection": [
+    {{"index": 0, "priority": 10}},
+    ...
+  ]
+}}
+
+ARTICLES:
+{articles_block}"""
+
+
+class ArticleCurator:
+    """
+    Uses the configured LLM to select and rank the best articles.
+    Falls back to returning all articles unchanged on any LLM failure —
+    curation is a quality improvement, not a hard requirement.
+    """
+
+    def __init__(self, llm_client=None):
+        self._llm = llm_client
+
+    def _get_llm(self):
+        if self._llm is None:
+            self._llm = LLMClient()
+        return self._llm
+
+    def curate(
+        self,
+        articles: list[Article],
+        top_n: int = 30,
+        user: UserProfile | None = None,
+    ) -> list[Article]:
+        """
+        Return up to `top_n` articles, sorted by LLM-assigned priority (highest first).
+        If fewer articles are provided than `top_n`, all are returned as-is.
+        """
+        if len(articles) <= top_n:
+            return articles
+
+        articles_block = "\n".join(
+            f'  <article index="{i}" source="{a.source}">'
+            f"<title>{a.title}</title>"
+            f"<excerpt>{(a.summary or a.content)[:120]}</excerpt>"
+            f"</article>"
+            for i, a in enumerate(articles)
+        )
+
+        prompt = _USER_TEMPLATE.format(top_n=top_n, articles_block=articles_block)
+
+        try:
+            llm = self._get_llm()
+            raw, _usage = llm.complete(
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                use_cache=False,
+            )
+            data = json.loads(raw)
+            priority_map: dict[int, int] = {
+                item["index"]: item["priority"]
+                for item in data.get("selection", [])
+                if isinstance(item.get("index"), int)
+            }
+        except Exception as exc:
+            log.warning("curator: LLM call failed (%s) — returning all articles", exc)
+            return articles
+
+        if not priority_map:
+            log.warning("curator: LLM returned empty selection — returning all articles")
+            return articles
+
+        selected = [
+            (articles[idx], priority)
+            for idx, priority in priority_map.items()
+            if idx < len(articles)
+        ]
+        selected.sort(key=lambda x: x[1], reverse=True)
+
+        result = [a for a, _ in selected[:top_n]]
+        log.info(
+            "curator: selected %d/%d articles (top priority=%.0f)",
+            len(result),
+            len(articles),
+            selected[0][1] if selected else 0,
+        )
+        return result

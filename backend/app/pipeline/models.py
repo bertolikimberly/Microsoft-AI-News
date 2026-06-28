@@ -61,6 +61,7 @@ class Article(BaseModel):
 
     source_type: str = "secondary"   # "primary" | "secondary" | "aggregator"
     relevance_score: float = 0.0
+    original_language: Optional[str] = None  # ISO 639-1 code detected at ingest time
 
 
 # ---------------------------------------------------------------------------

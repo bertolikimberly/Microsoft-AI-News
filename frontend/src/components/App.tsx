@@ -119,8 +119,8 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [prefsOpen, setPrefsOpen] = useState(false)
   const [prefs, setPrefs] = useState<Prefs>({
-    role: 'engineer', region: 'eu', topics: [],
-    depth: 'deep', delivery: ['daily'], keywords: '', tone: 'calm', energy: 35,
+    role: 'for_engineers_technical_depth', region: 'europe', topics: [],
+    depth: 'deep', delivery: ['daily'], keywords: '', tone: 'technical', energy: 35,
   })
   const [folders, setFolders] = useState<NewsFolder[]>([])
 
@@ -279,6 +279,12 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
   const scrollRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const onExpired = () => { writeSession(null); setUser(null) }
+    window.addEventListener('mai:session-expired', onExpired)
+    return () => window.removeEventListener('mai:session-expired', onExpired)
+  }, [])
 
   useEffect(() => {
     // Magic-link verify redirects back as: {frontend_url}/#access_token=<jwt>
@@ -648,7 +654,25 @@ export default function App() {
               setToast(`Folder "${localFolder.name}" created.`)
             }
           }}
-        onSave={() => { setPrefsOpen(false); setToast('Preferences saved.') }}
+        onSave={() => {
+          setPrefsOpen(false)
+          setToast('Preferences saved.')
+          // Re-fetch from API so `prefs.topics` reflects what was actually stored,
+          // which triggers DashboardView to re-fetch with the new topic filter.
+          if (getToken()) {
+            getPreferences().then((p) => {
+              setPrefs((curr) => ({
+                ...curr,
+                topics: p.topics,
+                region: p.regions[0] ?? curr.region,
+                role: p.role ?? curr.role,
+                depth: p.length ?? curr.depth,
+                delivery: [p.frequency],
+                tone: p.tone ?? curr.tone,
+              }))
+            }).catch(() => {})
+          }
+        }}
       />
 
       {tweakControls}

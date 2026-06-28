@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from src.models import Article, UserProfile
+from app.pipeline.models import Article, UserProfile
 
 
 _DEFAULT_WEIGHTS = {

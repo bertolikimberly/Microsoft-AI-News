@@ -13,16 +13,16 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from src.models import (
+from app.pipeline.models import (
     Article,
     DigestArticle,
     NewsletterDigest,
     TokenUsage,
     UserProfile,
 )
-from src.llm.client import LLMClient
-from src.llm.prompts import build_newsletter_system_prompt, build_newsletter_user_message
-from config.settings import settings
+from app.pipeline.llm.client import LLMClient
+from app.pipeline.llm.prompts import build_newsletter_system_prompt, build_newsletter_user_message
+from app.config import settings
 
 
 class NewsletterGenerator:

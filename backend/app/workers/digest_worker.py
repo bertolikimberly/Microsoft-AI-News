@@ -16,9 +16,8 @@ Flow (see docs/feature_endpoints.md F3):
        c. Persist the resulting NewsletterDigest as Digest + DigestItem
           + Article rows via the integrations.llm_bridge adapter.
 
-The LLM pipeline lives in the sibling `llm_engineering/` tree; we put it
-on sys.path via integrations.bootstrap so backend code can import from
-`src.*` without packaging it as a wheel.
+The LLM pipeline lives in `backend/app/pipeline/` and is imported
+directly as a regular Python package.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.integrations import bootstrap, email
+from app.integrations import email
 from app.integrations.digest_renderer import render_html, render_subject
 from app.integrations.fetch_state import persisted_fetch_state
 from app.models import Article, Digest, DigestItem, Preferences, Source, User
@@ -291,16 +290,15 @@ def _build_pipeline():
     in that function.
     """
     try:
-        bootstrap.ensure_pipeline_importable()
-        from src.pipeline import NewsPipeline
-        from app.rag.vector_store import ArticleVectorStore
+        from app.pipeline.pipeline import NewsPipeline
+        from app.pipeline.rag.vector_store import ArticleVectorStore
     except ImportError as exc:
         log.warning("digest_worker: pipeline import failed (%s)", exc)
         return None
 
     try:
         vector_store = ArticleVectorStore(fallback_source_id=_PIPELINE_SOURCE_ID)
-        return NewsPipeline(vector_store=vector_store), vector_store
+        return NewsPipeline(store=vector_store), vector_store
     except Exception:
         log.exception("digest_worker: pipeline construction failed")
         return None

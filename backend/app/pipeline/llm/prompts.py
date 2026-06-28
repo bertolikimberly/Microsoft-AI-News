@@ -5,11 +5,11 @@ Design principles:
 - System prompts are stable → cache them (prompt cache hit = 90% cost reduction)
 - User messages carry the variable context (articles, query)
 - Every answer must cite its source — enforced in the prompt
-- Tone adapts to user profile (executive vs technical)
+- Pinned articles (from "Tell me more about:") get full content; context articles get summaries
 """
 from __future__ import annotations
 
-from src.models import Article, UserProfile, TonePreference, DigestArticle
+from app.pipeline.models import Article, UserProfile, TonePreference, DigestArticle
 
 
 # ---------------------------------------------------------------------------
@@ -117,29 +117,38 @@ def build_newsletter_system_prompt(user: UserProfile) -> str:
 # Chatbot
 # ---------------------------------------------------------------------------
 
-CHATBOT_SYSTEM_PROMPT = """You are MAI, a sharp and concise tech intelligence assistant for Microsoft employees.
-Your job: help people make sense of what's happening in tech — fast.
+CHATBOT_SYSTEM_PROMPT = """You are MAI — Microsoft's AI Intelligence Briefing assistant, built for Microsoft's marketing, business, and engineering teams.
 
-HOW YOU TALK:
-- Direct and confident. No filler, no waffle.
-- Use plain language. Avoid corporate speak.
-- Short paragraphs. Bullet points only when genuinely listing things.
-- Match the energy of the question — a quick "what's up with X?" gets a tight 2-3 sentence answer; a detailed question gets structure.
-- You're not a search engine. Synthesize, compare, and surface the "so what".
+Your audience uses AI to drive real work: client pitches, product launches, content creation, developer tooling, and strategic decisions. Help them cut through noise and act on what matters.
+
+HOW YOU WRITE:
+- Write in flowing prose. No bold section headers, no numbered "implications" lists, no PowerPoint structure.
+- Short paragraphs separated by blank lines. Each paragraph is one clear idea.
+- If you genuinely need a list (e.g. enumerating tools, steps, or options), use a plain dash list — but only then.
+- Never create headers like "**1. Title:**" or "**Implication for X:**" — weave insights into the text naturally.
+- Match the question's energy: a quick question gets 2–3 tight sentences; a "tell me more" gets 3–4 paragraphs of real analysis.
+- You are a sharp analyst, not a consultant writing a slide deck.
+
+CITATIONS — this is mandatory:
+- After each claim, cite the source as a markdown link: [Source Name](URL)
+- The URL comes from the "Source: Name | URL" line in the retrieved context — use it exactly as written.
+- Example: "OpenAI released a new reasoning model [OpenAI Blog](https://openai.com/...)."
+- Never write the source name without a link. Never write "(Source)" or "Source Name" as plain text.
+- If you used several articles, spread citations across the answer — don't pile them all at the end.
+- For broad "what's the news" questions, draw from at least 3–4 different sources.
 
 WHAT YOU DO:
-- Answer questions grounded in the retrieved articles below.
-- When multiple articles touch the same story, weave them together — don't just list them.
-- Cite sources inline using markdown: [Source Name](URL). Never make up a URL.
-- If the retrieved context is thin on a topic, say so and share what you do know.
-- For follow-up questions, remember the conversation history and build on it.
+- Answer grounded in the retrieved articles. When the full article is there, go deep.
+- For article deep-dives: explain what happened, why it matters, and what the team could do with that insight — in prose, not a checklist.
+- Weave multiple articles together when they touch the same story.
+- Surface business, marketing, and creative angles alongside technical ones when relevant.
 
 WHAT YOU DON'T DO:
-- Don't start your answer with "Great question!" or any variation.
+- Don't start with "Great question!" or any variation.
 - Don't repeat the user's question back to them.
 - Don't say "As an AI language model..."
-- Don't pad your answer to seem more thorough.
-- Don't express political opinions. Stick to tech facts and business impact.
+- Don't pad with structure to look thorough. Tight prose is more impressive than a bulleted framework.
+- Don't express political opinions.
 """
 
 
@@ -147,14 +156,34 @@ def build_chat_user_message(
     query: str,
     retrieved_articles: list[Article],
     conversation_history: list[dict],
+    pinned: Article | None = None,
 ) -> str:
-    context_block = "\n\n".join(
-        f"[{i+1}] {a.title}\nSource: {a.source} | {a.url}\n{a.content[:600]}"
-        for i, a in enumerate(retrieved_articles)
-    )
+    """
+    Build the user-turn content for the LLM.
 
-    return f"""RETRIEVED CONTEXT (use only these sources for your answer):
+    Token economics:
+    - Pinned article (from "Tell me more about:" click): up to 2500 chars — full context
+    - All other articles: up to 450 chars each (summary-level context)
+    """
+    if not retrieved_articles:
+        context_block = "(No articles available in the context window.)"
+    else:
+        parts: list[str] = []
+        for i, a in enumerate(retrieved_articles):
+            is_pinned = pinned and a.id == pinned.id
+            content_limit = 2500 if is_pinned else 450
+            label = "FEATURED ARTICLE" if is_pinned else f"[{i + 1}]"
+            parts.append(
+                f"{label}\nTitle: {a.title}\nSource: {a.source} | {a.url}\n"
+                f"Published: {a.published_at.strftime('%Y-%m-%d') if a.published_at else 'unknown'}\n"
+                f"{a.content[:content_limit]}"
+            )
+        context_block = "\n\n---\n\n".join(parts)
+
+    return f"""RETRIEVED CONTEXT:
 {context_block}
+
+---
 
 USER QUESTION: {query}
 """
@@ -164,15 +193,16 @@ def build_chat_messages(
     query: str,
     retrieved_articles: list[Article],
     conversation_history: list[dict],
+    pinned: Article | None = None,
 ) -> list[dict]:
     """
     Build the messages array for the chat API call.
-    Conversation history is prepended; the new user message contains the retrieved context.
-    This means the context is injected fresh each turn — it's always current.
+    Conversation history is prepended; the new user message contains retrieved context.
+    Context is injected fresh each turn so it always reflects the latest question.
     """
     messages = list(conversation_history)
     messages.append({
         "role": "user",
-        "content": build_chat_user_message(query, retrieved_articles, conversation_history),
+        "content": build_chat_user_message(query, retrieved_articles, conversation_history, pinned=pinned),
     })
     return messages
