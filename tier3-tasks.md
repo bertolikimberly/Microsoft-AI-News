@@ -32,18 +32,16 @@ Decisions made and work needed to resolve inconsistencies in the backend.
 
 ---
 
-## 4. Email Delivery → Resend
+## 4. Email Delivery → Azure Communication Services (ACS)
 
-**Decision:** Use Resend. App is hosted on Azure but Resend is provider-agnostic — one API key, no Azure portal setup needed.
+**Decision:** Use ACS — team prefers staying fully on Azure.
 
-**Current state:** Email is wired to ACS (`backend/app/integrations/email.py`). `resend==2.4.0` is already in `requirements.txt` but unused. `azure-communication-email` is used in code but missing from `requirements.txt` (runtime failure).
+**Fix applied:** `azure-communication-email` was missing from `requirements.txt` (runtime failure). Now added. `email.py` and `config.py` restored to ACS.
 
-- [x] Rewrite `backend/app/integrations/email.py` to use the `resend` SDK
-- [x] Update `backend/app/config.py` — replaced ACS fields with `resend_api_key` and `resend_from` as primary
-- [x] Update `backend/.env.example` — Resend section already present and correct
-- [ ] Remove ACS resource block from `infra/main.bicep:354–398`
-- [ ] Update `render.yaml` env vars to use `RESEND_API_KEY` (lines 82–86 already reference Resend — verify they match)
-- [ ] Set `RESEND_API_KEY` and `RESEND_FROM` in Azure Container Apps environment (portal or Bicep)
+- [x] Add `azure-communication-email==1.0.0` to `backend/requirements.txt` (was missing — fixed)
+- [x] `backend/app/integrations/email.py` — ACS implementation confirmed correct
+- [x] `backend/app/config.py` — `acs_connection_string` and `acs_sender_address` fields confirmed
+- [ ] Set `ACS_CONNECTION_STRING` and `ACS_SENDER_ADDRESS` in Azure Container Apps environment (portal or Bicep)
 
 ---
 
@@ -101,30 +99,24 @@ Do these in order. Everything below assumes you are logged into GitHub and the A
 
 ---
 
-### Step 1 — Set up Resend
+### Step 1 — Get ACS credentials from Azure
 
-1. Go to **https://resend.com** → click **Get Started** → sign up with your email
-2. Verify your email address (Resend sends a confirmation link)
-3. In the Resend dashboard, go to **API Keys** → **Create API Key**
-   - Name: `MAI News`
-   - Permission: Full access
-   - Click **Add** → **copy the key immediately** (only shown once)
-4. For the sender address, you have two options:
-   - **Testing only:** use `onboarding@resend.dev` as `RESEND_FROM` — but you can only send to your own verified email address
-   - **Proper setup:** go to **Domains** → **Add Domain** → enter your domain → add the DNS records it shows you → wait for verification (usually a few minutes)
-   - Once domain is verified, use `MAI News <digest@yourdomain.com>` as `RESEND_FROM`
+1. Go to **https://portal.azure.com**
+2. Search for **Communication Services** in the top search bar → open your MAI News ACS resource (created by the Bicep deploy)
+3. Left sidebar → **Settings** → **Keys** → copy the **Primary connection string** — this is your `ACS_CONNECTION_STRING`
+4. Left sidebar → **Email** → **Domains** → open your Azure Managed Domain → copy the **MailFrom address** (looks like `DoNotReply@<random>.azurecomm.net`) — this is your `ACS_SENDER_ADDRESS`
 
 ---
 
-### Step 2 — Add Resend credentials to Azure
+### Step 2 — Add ACS credentials to your Container App
 
 1. Go to **https://portal.azure.com**
-2. Search for **Container Apps** in the top search bar → open your MAI News backend app
-3. In the left sidebar → **Settings** → **Environment variables**
+2. Search for **Container Apps** → open your MAI News backend app
+3. Left sidebar → **Settings** → **Environment variables**
 4. Click **Add** and add these two variables:
-   - Name: `RESEND_API_KEY` | Value: *(the key you copied in Step 1)*
-   - Name: `RESEND_FROM` | Value: `MAI News <digest@yourdomain.com>` *(or `onboarding@resend.dev` for testing)*
-5. Click **Save** → the container will restart automatically (takes ~30 seconds)
+   - Name: `ACS_CONNECTION_STRING` | Value: *(the connection string from Step 1)*
+   - Name: `ACS_SENDER_ADDRESS` | Value: *(the MailFrom address from Step 1)*
+5. Click **Save** → the container restarts automatically (~30 seconds)
 
 ---
 
