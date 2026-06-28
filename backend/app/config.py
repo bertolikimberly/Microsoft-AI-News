@@ -138,11 +138,6 @@ class Settings(BaseSettings):
     # IMPORTANT: changing provider requires re-ingesting all articles (different dim).
     embedding_provider: str = "local"
 
-    # ─── Cohere reranking ─────────────────────────────────────────────────
-    # Optional. When set, the RAG pipeline reranks vector search candidates
-    # with Cohere's rerank-english-v3.0 (free tier: 1000 calls/month).
-    cohere_api_key: str = ""
-
     # ─── Pipeline tuning ─────────────────────────────────────────────────
     max_tokens_newsletter: int = 2000
     max_tokens_chat: int = 3000
