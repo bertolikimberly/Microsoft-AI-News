@@ -62,11 +62,6 @@ sentence-transformers>=3.4.0
 # EMBEDDING_PROVIDER=gemini → use text-embedding-004 (768-dim, free tier)
 google-generativeai>=0.8.0
 
-# ── Cohere reranking ──────────────────────────────────────────────────────
-# Reranks RAG candidates after vector search to boost precision.
-# Free tier: 1000 calls/month. Set COHERE_API_KEY to enable.
-cohere>=5.0.0
-
 # ── Language detection + translation ─────────────────────────────────────
 # langdetect: fast language ID from article text.
 # deep-translator: free Google Translate wrapper — translates non-English

@@ -114,7 +114,7 @@ def _build_components():
         from app.pipeline.ingestion.fetcher import RSSFetcher
         from app.pipeline.ingestion.deduplicator import ArticleDeduplicator
         from app.pipeline.ingestion.curator import ArticleCurator
-        from app.pipeline.store import ArticleStore
+        from app.pipeline.rag.vector_store import ArticleVectorStore
     except ImportError as exc:
         log.warning("ingest_worker: import failed (%s)", exc)
         return None
@@ -123,7 +123,7 @@ def _build_components():
         fetcher = RSSFetcher()
         deduplicator = ArticleDeduplicator()
         curator = ArticleCurator()
-        store = ArticleStore(fallback_source_id=_PIPELINE_SOURCE_ID)
+        store = ArticleVectorStore(fallback_source_id=_PIPELINE_SOURCE_ID)
         return fetcher, deduplicator, curator, store
     except Exception:
         log.exception("ingest_worker: component construction failed")

@@ -3,8 +3,6 @@ pgvector-backed article store.
 
 Writes embeddings into the shared `articles` table so the API, pipeline,
 and workers all read from one source of truth.
-
-Compatible with `NewsPipeline(vector_store=...)` — pass a stub in tests.
 """
 from __future__ import annotations
 
@@ -19,19 +17,12 @@ from app.config import settings
 from app.db.session import SessionLocal
 from app.models import Article as ArticleORM
 from app.models import ArticleTag, Source, Tag
-
 from app.pipeline.models import Article as PipelineArticle
 
 log = logging.getLogger(__name__)
 
 
 class ArticleVectorStore:
-    """
-    `retrieve` accepts an optional `topic_filter: list[str]` of topic-tag
-    slugs to constrain results; pass any dimension's slugs via the more
-    general `tag_filter: list[tuple[dimension, slug]]` if you need
-    cross-dimensional filtering.
-    """
 
     def __init__(self, fallback_source_id: str = "src_pipeline"):
         self._encoder: SentenceTransformer | None = None
@@ -40,6 +31,10 @@ class ArticleVectorStore:
     # ------------------------------------------------------------------
     # Indexing
     # ------------------------------------------------------------------
+
+    def save_articles(self, articles: list[PipelineArticle]) -> int:
+        """Alias for index_articles — matches the ArticleStore interface."""
+        return self.index_articles(articles)
 
     def index_articles(self, articles: list[PipelineArticle]) -> int:
         if not articles:
@@ -69,19 +64,9 @@ class ArticleVectorStore:
         topic_filter: list[str] | None = None,
         tag_filter: list[tuple[str, str]] | None = None,
     ) -> list[tuple[PipelineArticle, float]]:
-        """
-        Return (article, cosine_similarity) pairs, highest similarity first.
-        When COHERE_API_KEY is set, reranks the initial vector candidates.
-
-        `topic_filter` limits to articles tagged with any of the given
-        topic-dimension slugs. `tag_filter` is the general form —
-        list of (dimension, slug) pairs joined as OR.
-        """
+        """Return (article, cosine_similarity) pairs, highest similarity first."""
         query_embedding = self._encode([query])[0]
-        # Fetch more candidates than needed so the reranker has room to select.
-        fetch_k = top_k * 3 if settings.cohere_api_key else top_k
 
-        # Normalise filters into a single (dimension, slug) list.
         pairs: list[tuple[str, str]] = list(tag_filter or [])
         if topic_filter:
             pairs.extend(("topic", slug) for slug in topic_filter)
@@ -96,71 +81,35 @@ class ArticleVectorStore:
             )
 
             if pairs:
-                # Match if any (dimension, slug) pair tags the article.
-                # We can't easily express an OR-of-AND-pairs in a single IN,
-                # so we group by dimension and use IN per group.
                 from collections import defaultdict
+                from sqlalchemy import union
                 grouped: dict[str, list[str]] = defaultdict(list)
                 for dim, slug in pairs:
                     grouped[dim].append(slug)
-
-                clauses = []
-                for dim, slugs in grouped.items():
-                    clauses.append(
-                        select(ArticleTag.article_id).where(
-                            ArticleTag.dimension == dim,
-                            ArticleTag.slug.in_(slugs),
-                        )
+                clauses = [
+                    select(ArticleTag.article_id).where(
+                        ArticleTag.dimension == dim,
+                        ArticleTag.slug.in_(slugs),
                     )
-                # Articles matching any group.
-                from sqlalchemy import union
+                    for dim, slugs in grouped.items()
+                ]
                 stmt = stmt.where(ArticleORM.id.in_(union(*clauses)))
 
-            stmt = stmt.order_by("distance").limit(fetch_k)
+            stmt = stmt.order_by("distance").limit(top_k)
 
-            candidates: list[tuple[PipelineArticle, float]] = []
+            results: list[tuple[PipelineArticle, float]] = []
             for row, distance in db.execute(stmt).all():
                 similarity = round(1.0 - float(distance), 4)
-                candidates.append((_orm_to_pipeline(row), similarity))
+                results.append((_orm_to_pipeline(row), similarity))
 
-        if settings.cohere_api_key and len(candidates) > top_k:
-            candidates = _cohere_rerank(query, candidates, top_k)
-
-        return candidates[:top_k]
-
-
-def _cohere_rerank(
-    query: str,
-    candidates: list[tuple[PipelineArticle, float]],
-    top_k: int,
-) -> list[tuple[PipelineArticle, float]]:
-    """Rerank candidates with Cohere — improves precision over pure cosine similarity."""
-    try:
-        import cohere
-        co = cohere.ClientV2(api_key=settings.cohere_api_key)
-        docs = [f"{a.title}\n{(a.content or '')[:400]}" for a, _ in candidates]
-        response = co.rerank(
-            model="rerank-english-v3.0",
-            query=query,
-            documents=docs,
-            top_n=top_k,
-        )
-        reranked = []
-        for r in response.results:
-            article, _ = candidates[r.index]
-            reranked.append((article, round(r.relevance_score, 4)))
-        return reranked
-    except Exception:
-        log.warning("Cohere reranking failed; falling back to vector order")
-        return candidates[:top_k]
+        return results
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
-        provider = settings.embedding_provider.lower()
-        if provider == "gemini":
+        if settings.embedding_provider.lower() == "gemini":
             return self._encode_gemini(texts)
         return self._encode_local(texts)
 
@@ -168,9 +117,7 @@ def _cohere_rerank(
         if self._encoder is None:
             self._encoder = SentenceTransformer(settings.embedding_model)
         return self._encoder.encode(
-            texts,
-            normalize_embeddings=True,
-            show_progress_bar=False,
+            texts, normalize_embeddings=True, show_progress_bar=False
         ).tolist()
 
     def _encode_gemini(self, texts: list[str]) -> list[list[float]]:
@@ -181,7 +128,7 @@ def _cohere_rerank(
             content=texts,
             task_type="retrieval_document",
         )
-        return result["embedding"] if len(texts) == 1 else [r for r in result["embedding"]]
+        return result["embedding"] if len(texts) == 1 else list(result["embedding"])
 
     @staticmethod
     def _embed_text(article: PipelineArticle) -> str:
@@ -194,11 +141,7 @@ def _cohere_rerank(
         embedding: list[float],
         valid_tags: set[tuple[str, str]],
     ) -> bool:
-        existing = (
-            db.query(ArticleORM)
-            .filter(ArticleORM.url == article.url)
-            .first()
-        )
+        existing = db.query(ArticleORM).filter(ArticleORM.url == article.url).first()
         if existing is not None:
             changed = False
             if existing.embedding is None:
@@ -225,7 +168,6 @@ def _cohere_rerank(
         db.add(row)
         db.flush()
 
-        # Persist multi-dim tags, dropping anything outside the seeded taxonomy.
         for dimension, slugs in (
             ("topic", article.topic_tags),
             ("business", article.business_tags),
@@ -248,14 +190,12 @@ def _cohere_rerank(
     def _ensure_fallback_source(self, db) -> None:
         if db.get(Source, self._fallback_source_id) is not None:
             return
-        db.add(
-            Source(
-                id=self._fallback_source_id,
-                name="Pipeline (uncategorized)",
-                license="rss-snippet-only",
-                source_type="aggregator",
-            )
-        )
+        db.add(Source(
+            id=self._fallback_source_id,
+            name="Pipeline (uncategorized)",
+            license="rss-snippet-only",
+            source_type="aggregator",
+        ))
         db.flush()
 
     @staticmethod
@@ -270,7 +210,6 @@ def _to_aware_utc(dt: datetime) -> datetime:
 
 
 def _orm_to_pipeline(row: ArticleORM) -> PipelineArticle:
-    """Reconstruct a pipeline Article from an ORM row for return to callers."""
     by_dim: dict[str, list[str]] = {}
     for t in row.tags:
         by_dim.setdefault(t.dimension, []).append(t.slug)
