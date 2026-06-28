@@ -146,15 +146,12 @@ class Settings(BaseSettings):
     # ─── Observability ───────────────────────────────────────────────────
     log_level: str = "INFO"
 
-    # ─── Email (Gmail SMTP) ────────────────────────────────────────────────
-    # Outbound mail via Gmail SMTP SSL (port 465) + an App Password.
-    # Steps to get an App Password:
-    #   1. Enable 2-Step Verification on the sending Gmail account.
-    #   2. myaccount.google.com → Security → App Passwords.
-    #   3. Create one (name it "MAI News"), copy the 16-char code.
-    #   4. Set both variables — never use your account password here.
-    gmail_sender: str = ""
-    gmail_app_password: str = ""
+    # ─── Email (Azure Communication Services) ────────────────────────────
+    # Outbound mail via ACS Email. Both vars come from the ACS resource in
+    # Azure Portal → mainews-comms2026 → Settings → Keys (connection string)
+    # and the verified domain's MailFrom address.
+    acs_connection_string: str = ""
+    acs_sender_address: str = ""
 
     # ─── Internal worker auth ─────────────────────────────────────────────
     # Shared secret used to authenticate calls to /api/v1/internal/*
