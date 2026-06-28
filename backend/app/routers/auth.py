@@ -95,8 +95,8 @@ def _oauth_cookie_kwargs() -> dict:
 _DEV_USER = {
     "entra_oid": "00000000-0000-0000-0000-000000000001",
     "entra_tid": "00000000-0000-0000-0000-000000000002",
-    "email": "dev.user@microsoft.com",
-    "display_name": "Dev User",
+    "email": "jfernandezsande@student.ie.edu",
+    "display_name": "Joaquin Fernandez Sande",
 }
 
 
