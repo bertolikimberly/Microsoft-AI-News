@@ -1,34 +1,29 @@
 """
-Email delivery via Gmail SMTP + App Password.
+Email delivery via Azure Communication Services (ACS).
 
 Configuration (in backend/.env):
-  GMAIL_SENDER       — your full Gmail address, e.g. you@gmail.com
-  GMAIL_APP_PASSWORD — 16-char App Password from
-                       myaccount.google.com → Security → App Passwords
-                       (requires 2-Step Verification to be enabled)
+  ACS_CONNECTION_STRING  — primary connection string from
+                           Azure Portal → mainews-comms2026 → Settings → Keys
+  ACS_SENDER_ADDRESS     — MailFrom address from the verified ACS domain,
+                           e.g. DoNotReply@<random>.azurecomm.net
 
-Failure handling: missing credentials or SMTP errors are logged and
-return False — the worker keeps going for other users instead of
-crashing the whole run.
+Failure handling: missing credentials or ACS errors are logged and return
+False — the worker keeps going for other users instead of crashing the run.
 """
 from __future__ import annotations
 
 import logging
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+
+from azure.communication.email import EmailClient
 
 from app.config import settings
 
 log = logging.getLogger(__name__)
 
-_SMTP_HOST = "smtp.gmail.com"
-_SMTP_PORT = 465
-
 
 def is_configured() -> bool:
-    """True if Gmail credentials are present and the worker can send."""
-    return bool(settings.gmail_sender and settings.gmail_app_password)
+    """True if ACS credentials are present."""
+    return bool(settings.acs_connection_string and settings.acs_sender_address)
 
 
 def send_digest(
@@ -38,35 +33,28 @@ def send_digest(
     html: str,
 ) -> bool:
     """
-    Send one transactional email via Gmail SMTP SSL.
+    Send one transactional email via ACS.
     Returns True on success, False on any failure. Never raises.
     """
     if not is_configured():
         log.info(
-            "email.send_digest: GMAIL_SENDER or GMAIL_APP_PASSWORD missing "
+            "email.send_digest: ACS_CONNECTION_STRING or ACS_SENDER_ADDRESS not set "
             "— skipping send to %s",
             to_email,
         )
         return False
 
-    msg = MIMEMultipart("related")
-    msg["Subject"] = subject
-    msg["From"] = f"MAI News <{settings.gmail_sender}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html", "utf-8"))
-
     try:
-        with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT) as server:
-            server.login(settings.gmail_sender, settings.gmail_app_password)
-            server.send_message(msg)
+        client = EmailClient.from_connection_string(settings.acs_connection_string)
+        message = {
+            "senderAddress": settings.acs_sender_address,
+            "recipients": {"to": [{"address": to_email}]},
+            "content": {"subject": subject, "html": html},
+        }
+        poller = client.begin_send(message)
+        poller.result()
         log.info("email.send_digest: sent to %s", to_email)
         return True
-    except smtplib.SMTPAuthenticationError:
-        log.error(
-            "email.send_digest: Gmail auth failed — check GMAIL_APP_PASSWORD "
-            "(must be a 16-char App Password, not your account password)"
-        )
-        return False
     except Exception as exc:
-        log.warning("email.send_digest: SMTP error sending to %s: %s", to_email, exc)
+        log.warning("email.send_digest: ACS error sending to %s: %s", to_email, exc)
         return False

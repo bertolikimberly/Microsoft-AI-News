@@ -298,7 +298,7 @@ def _build_pipeline():
 
     try:
         vector_store = ArticleVectorStore(fallback_source_id=_PIPELINE_SOURCE_ID)
-        return NewsPipeline(vector_store=vector_store), vector_store
+        return NewsPipeline(store=vector_store), vector_store
     except Exception:
         log.exception("digest_worker: pipeline construction failed")
         return None
