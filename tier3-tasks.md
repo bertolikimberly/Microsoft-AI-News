@@ -146,6 +146,37 @@ ACS → digest worker → cron scheduler all confirmed working end-to-end.
 
 ---
 
+---
+
+## 9. Frontend Deployment → Azure Storage Static Website
+
+**Current state:** Frontend built and deployed to `mainewswebstorage` (francecentral).
+Live URL: `https://mainewswebstorage.z28.web.core.windows.net`
+
+- [x] Created `frontend/.env.production` with `NEXT_PUBLIC_API_URL` pointing to Azure backend
+- [x] Added `!frontend/.env.production` exception to `.gitignore` so it's committed
+- [x] Built frontend with `npm run build` (static export to `frontend/out/`)
+- [x] Uploaded to Azure Storage `$web` container via `az storage blob upload-batch`
+- [x] Set `ENV=prod`, `ALLOWED_ORIGINS`, `FRONTEND_URL` on Container App (CORS fix)
+- [x] Set `OAUTH_REDIRECT_URI` on Container App (magic link was pointing to localhost)
+- [ ] Confirm full login flow works end-to-end (magic link → verify → frontend logged in)
+
+---
+
+## 10. Magic-Link Auth → Fully Wired
+
+**Current state:** Auth flow was already implemented in code. Needed ACS (Task 4) and correct
+env vars (Task 9) to work in prod.
+
+- [x] `AuthGate` calls `requestMagicLink` → `POST /auth/email/request-login` ✅
+- [x] Backend sends magic link via ACS ✅
+- [x] `OAUTH_REDIRECT_URI` set so links point to Azure backend (not localhost) ✅
+- [x] `App.tsx` handles `#access_token=` hash on return from verify endpoint ✅
+- [ ] Confirm full login flow end-to-end
+
+---
+
 ## Tier 3 Complete ✅
 
 All decisions made, all infrastructure live, email delivery confirmed.
+Frontend deployed. Auth wired. Pending final login flow confirmation.
