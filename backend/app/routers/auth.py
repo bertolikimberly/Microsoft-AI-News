@@ -27,6 +27,7 @@ identical session JWTs and provision identical User rows, so frontend
 code doesn't have to care which one was used.
 """
 
+import json
 import logging
 import secrets
 
@@ -46,6 +47,29 @@ from app.models import User, Preferences
 from app.seed import seed_dev_demo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _default_preferences() -> Preferences:
+    """
+    Sensible defaults for new users — pre-selected topics and role so the
+    dashboard shows relevant content from day one instead of everything.
+    """
+    import json
+    p = Preferences()
+    # Tier 1 topics most relevant to a Microsoft AI/tech team
+    p.topics_json = json.dumps([
+        "artificial_intelligence_ml",
+        "ai_tools_productivity",
+        "software_development",
+        "cloud_infrastructure",
+    ])
+    p.business_tags_json = json.dumps(["big_tech_faang_microsoft"])
+    p.regions_json = json.dumps(["europe", "north_america"])
+    p.role = "for_engineers_technical_depth"
+    p.frequency = "daily"
+    p.length = "deep"
+    p.tone = "technical"
+    return p
 
 
 # Cookies that carry state + PKCE verifier across the Entra roundtrip.
@@ -138,7 +162,7 @@ def callback(
             entra_tid=identity.tid,
             email=identity.email,
             display_name=identity.display_name,
-            preferences=Preferences(),
+            preferences=_default_preferences(),
         )
         db.add(user)
         db.commit()
@@ -221,7 +245,7 @@ def verify_login_email(
             entra_tid=identity.tid,
             email=identity.email,
             display_name=identity.display_name,
-            preferences=Preferences(),
+            preferences=_default_preferences(),
         )
         db.add(user)
         db.commit()
@@ -267,7 +291,7 @@ def dev_login(db: Session = Depends(get_db)) -> dict:
             entra_tid=_DEV_USER["entra_tid"],
             email=_DEV_USER["email"],
             display_name=_DEV_USER["display_name"],
-            preferences=Preferences(),  # defaults from the model
+            preferences=_default_preferences(),
         )
         db.add(user)
         db.commit()

@@ -29,9 +29,7 @@ from app.models import (
     User as UserORM,
 )
 
-# The LLM pipeline lives in a sibling package (`llm_engineering/src/`).
-# Path is set up by app.integrations.bootstrap, which runs at package import.
-from src.models import (
+from app.pipeline.models import (
     Article as PipelineArticle,
     DigestFrequency,
     NewsletterDigest,
@@ -229,18 +227,13 @@ def chat_reply(
     Raises RuntimeError on import / construction failure so the caller can
     fall back to a stub stream instead of streaming nothing.
     """
-    # Deferred import: don't pay the bootstrap cost on every backend boot.
-    from app.integrations import bootstrap
-
     try:
-        bootstrap.ensure_pipeline_importable()
-        from src.llm.chatbot import Chatbot
-        from src.models import ChatMessage
-        from app.rag.vector_store import ArticleVectorStore
+        from app.pipeline.llm.chatbot import Chatbot
+        from app.pipeline.models import ChatMessage
     except ImportError as exc:
         raise RuntimeError(f"chat pipeline unavailable: {exc}") from exc
 
-    chatbot = Chatbot(vector_store=ArticleVectorStore())
+    chatbot = Chatbot()
 
     profile = user_to_profile(user, prefs)
     chat_history = [ChatMessage(role=r, content=c) for r, c in history]
@@ -292,17 +285,13 @@ def stream_chat_reply(
     Raises RuntimeError on import / construction failure so the caller
     can fall back to the stub stream.
     """
-    from app.integrations import bootstrap
-
     try:
-        bootstrap.ensure_pipeline_importable()
-        from src.llm.chatbot import Chatbot
-        from src.models import ChatMessage
-        from app.rag.vector_store import ArticleVectorStore
+        from app.pipeline.llm.chatbot import Chatbot
+        from app.pipeline.models import ChatMessage
     except ImportError as exc:
         raise RuntimeError(f"chat pipeline unavailable: {exc}") from exc
 
-    chatbot = Chatbot(vector_store=ArticleVectorStore())
+    chatbot = Chatbot()
     profile = user_to_profile(user, prefs)
     chat_history = [ChatMessage(role=r, content=c) for r, c in history]
 

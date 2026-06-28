@@ -1,9 +1,6 @@
 # Backend container image.
 #
-# Targets Azure Container Apps (consumption plan) and is also runnable
-# locally. **Build context must be the repo root**, not the backend dir,
-# because the image needs the sibling `llm_engineering/` tree and
-# `sources.json` for the digest worker to import the pipeline:
+# Build context must be the repo root so `sources.json` is accessible:
 #
 #   docker build -t tech-intel-api -f backend/Dockerfile .
 #   docker run -p 8000:8000 --env-file backend/.env tech-intel-api
@@ -11,8 +8,8 @@
 # (The GitHub Actions workflow `.github/workflows/deploy-backend.yml`
 # sets `context: .` for the same reason.)
 #
-# The root Dockerfile at the repo root is for the data engineering
-# Jupyter environment — separate concern.
+# The LLM pipeline is now part of backend/app/pipeline/ — no separate
+# llm_engineering/ directory needs to be copied into the image.
 
 FROM python:3.12-slim
 
@@ -32,13 +29,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends libpq5 curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python deps first so the layer is cached when only code changes.
-# Both requirements files are installed into the same image — the backend's
-# digest worker imports the pipeline directly, so they share one venv.
 WORKDIR /app
-COPY backend/requirements.txt ./backend-requirements.txt
-COPY llm_engineering/requirements.txt ./pipeline-requirements.txt
-RUN pip install --no-cache-dir -r backend-requirements.txt -r pipeline-requirements.txt
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download the sentence-transformers embedding model into the image
 # so the Container App can start serving requests without a multi-second
@@ -54,12 +47,10 @@ RUN pip install --no-cache-dir -r backend-requirements.txt -r pipeline-requireme
 # ARG EMBEDDING_MODEL=all-MiniLM-L6-v2
 # RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"
 
-# Copy the actual application code.
-#   - backend/app  → /app/app             (FastAPI app)
-#   - llm_engineering → /app/llm_engineering (pipeline imported via bootstrap)
+# Copy the application code.
+#   - backend/app  → /app/app             (FastAPI app, includes pipeline/)
 #   - sources.json → /app/sources.json    (read by seed_tags + source registry)
 COPY backend/app/ ./app/
-COPY llm_engineering/ ./llm_engineering/
 COPY sources.json ./sources.json
 
 # Azure Container Apps and Render both honour $PORT; default to 8000

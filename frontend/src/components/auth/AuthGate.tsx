@@ -6,7 +6,7 @@ import MaiMark from '@/components/ui/MaiMark'
 import Wordmark from '@/components/ui/Wordmark'
 import { FONTS, NEWS_FONTS } from '@/constants/fonts'
 import { writeSession, apiUserToLocal } from '@/lib/session'
-import { requestMagicLink, setToken, getMe } from '@/lib/api'
+import { requestMagicLink, setToken, getMe, devLogin as apiDevLogin } from '@/lib/api'
 import type { Palette, User } from '@/types'
 
 interface Props {
@@ -50,6 +50,21 @@ export default function AuthGate({ palette, displayFont, newsFont, blur, grain, 
     if (!devLink) return
     // Extract token from the dev link and verify it client-side via the backend
     window.location.href = devLink
+  }
+
+  const handleDevLogin = async () => {
+    setUiState('loading')
+    try {
+      const data = await apiDevLogin()
+      setToken(data.access_token)
+      const apiUser = await getMe()
+      const u = apiUserToLocal(apiUser)
+      writeSession(u)
+      onAuthed(u)
+    } catch {
+      setError('Dev login failed — is the server running?')
+      setUiState('idle')
+    }
   }
 
   const reset = () => {
@@ -152,6 +167,24 @@ export default function AuthGate({ palette, displayFont, newsFont, blur, grain, 
                     {uiState === 'loading' ? 'Sending…' : 'Send login link →'}
                   </button>
                 </form>
+
+                <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+                  <p style={{ color: palette.muted, fontSize: '0.75rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+                    Local dev
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDevLogin}
+                    disabled={uiState === 'loading'}
+                    style={{
+                      width: '100%', padding: '0.6rem 1rem', borderRadius: '6px',
+                      border: '1px solid rgba(0,0,0,0.15)', background: 'transparent',
+                      color: palette.muted, fontSize: '0.82rem', cursor: 'pointer',
+                    }}
+                  >
+                    Skip → enter as dev user
+                  </button>
+                </div>
               </>
             )}
           </div>

@@ -44,11 +44,21 @@ class Settings(BaseSettings):
     # pgvector/pgvector image; on Neon it's pre-enabled.
     database_url: str = "postgresql+psycopg://mai:mai@localhost:5432/mai_news"
 
-    # Dimensionality of the embeddings stored in `articles.embedding`. Must
-    # match the sentence-transformers model the vector store uses (default
-    # `all-MiniLM-L6-v2` produces 384-dim vectors). Change both together.
+    # Dimensionality must match the embedding model:
+    #   local (all-MiniLM-L6-v2) → 384
+    #   gemini (text-embedding-004) → 768
+    # Override via EMBEDDING_DIM if needed; otherwise set automatically below.
     embedding_dim: int = 384
     embedding_model: str = "all-MiniLM-L6-v2"
+    # Gemini embedding model name — used when EMBEDDING_PROVIDER=gemini
+    gemini_embedding_model: str = "text-embedding-004"
+
+    @property
+    def effective_embedding_dim(self) -> int:
+        """Return the correct dim for the configured embedding provider."""
+        if self.embedding_provider.lower() == "gemini":
+            return 768
+        return self.embedding_dim
 
     # ─── JWT (our own session token; see docs/auth.md §4) ─────────────────
     # HS256 + a symmetric secret. In production the secret lives in the
@@ -58,8 +68,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "tech-intel-news"
     jwt_audience: str = "tech-intel-news-api"
-    # Access token lifetime in minutes. Matches docs/auth.md §4 (30 min).
-    jwt_ttl_minutes: int = 30
+    # Access token lifetime in minutes. 480 = 8 hours (comfortable dev session).
+    jwt_ttl_minutes: int = 480
 
     # ─── Microsoft Entra ID (OAuth identity provider — primary) ───────────
     # The App Registration is created in a personal Microsoft tenant
@@ -101,14 +111,45 @@ class Settings(BaseSettings):
         """Parse the comma-separated env var into a list, ignoring blanks."""
         return [o.strip() for o in self.allowed_origins_raw.split(",") if o.strip()]
 
-    # ─── LLM (OpenAI direct — see docs/local_stack.md §6) ─────────────────
-    # PAYG account. Set a hard $-cap on the OpenAI dashboard so accidents
-    # are bounded. Leave blank locally to disable LLM calls (the LLM client
-    # adapter should raise a clear error when this is missing).
+    # ─── LLM provider ────────────────────────────────────────────────────
+    # "openai" | "anthropic" | "gemini"
+    # Gemini Flash is free-tier and recommended when cost matters.
+    llm_provider: str = "openai"
+
+    # Anthropic
+    anthropic_api_key: str = ""
+    llm_model: str = "claude-sonnet-4-6"
+    llm_fast_model: str = "claude-haiku-4-5-20251001"
+
+    # OpenAI
     openai_api_key: str = ""
-    # Model routing — small for headline summaries, large for chat & deep summary.
-    openai_model_small: str = "gpt-4o-mini"
-    openai_model_large: str = "gpt-4o"
+    openai_model: str = "gpt-4o"
+    openai_fast_model: str = "gpt-4o-mini"
+
+    # Google Gemini — free tier available at aistudio.google.com
+    # gemini-2.0-flash is the recommended model (generous free quota).
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_fast_model: str = "gemini-2.0-flash"
+
+    # ─── Embeddings ───────────────────────────────────────────────────────
+    # "local"  → all-MiniLM-L6-v2 via sentence-transformers (384-dim, no key needed)
+    # "gemini" → text-embedding-004 via Gemini API (768-dim, free tier, needs GEMINI_API_KEY)
+    # IMPORTANT: changing provider requires re-ingesting all articles (different dim).
+    embedding_provider: str = "local"
+
+    # ─── Cohere reranking ─────────────────────────────────────────────────
+    # Optional. When set, the RAG pipeline reranks vector search candidates
+    # with Cohere's rerank-english-v3.0 (free tier: 1000 calls/month).
+    cohere_api_key: str = ""
+
+    # ─── Pipeline tuning ─────────────────────────────────────────────────
+    max_tokens_newsletter: int = 2000
+    max_tokens_chat: int = 3000
+    retrieval_top_k: int = 8
+
+    # ─── Observability ───────────────────────────────────────────────────
+    log_level: str = "INFO"
 
     # ─── Email (Azure Communication Services) ─────────────────────────────
     # Connection string + sender address come from the
