@@ -5,7 +5,7 @@ name: Run digest worker
 # (2000 min/month for private repos, unlimited for public).
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   BACKEND_URL            e.g. https://your-app.onrender.com
+#   BACKEND_URL            e.g. https://your-app.azurecontainerapps.io
 #   WORKER_SHARED_SECRET   matches WORKER_SHARED_SECRET in the backend's env
 
 on:
@@ -36,8 +36,7 @@ jobs:
           fi
           # --fail makes curl exit non-zero on any HTTP 4xx/5xx so the
           # workflow surfaces backend errors as failed runs.
-          # --max-time 300 accommodates Render free-tier cold starts +
-          # the LLM summarisation pass.
+          # --max-time 300 accommodates cold starts + the LLM summarisation pass.
           curl --fail --silent --show-error --max-time 300 \
             -X POST \
             -H "Authorization: Bearer $WORKER_SHARED_SECRET" \

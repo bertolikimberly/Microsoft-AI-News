@@ -78,7 +78,7 @@ def run() -> dict:
                     digest = _generate_for_user(db, pipeline, vector_store, user)
                     db.commit()
                     generated += 1
-                    # Email is best-effort: a Resend outage shouldn't fail the
+                    # Email is best-effort: an ACS outage shouldn't fail the
                     # generation we just committed. _deliver_email opens its own
                     # session to update sent_at.
                     if digest is not None and _deliver_email(user, digest):
@@ -243,7 +243,7 @@ def _generate_for_user(
 
 def _deliver_email(user: User, digest: Digest) -> bool:
     """
-    Render the digest as HTML and send via Resend. Returns True on
+    Render the digest as HTML and send via ACS. Returns True on
     accepted send; stamps `digest.sent_at` so it's not retried.
 
     Opens its own DB session because the worker's session has already
