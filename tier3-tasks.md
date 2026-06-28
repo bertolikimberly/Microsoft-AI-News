@@ -95,21 +95,89 @@ Decisions made and work needed to resolve inconsistencies in the backend.
 
 ---
 
-## Manual Steps Before Going Live
+## Exact Steps to Go Live
 
-These require action outside the codebase — no code changes needed.
+Do these in order. Everything below assumes you are logged into GitHub and the Azure Portal.
 
-### Resend (Task 4)
-- [ ] Sign up at https://resend.com (free, no card required)
-- [ ] Add and verify a sending domain, or use `onboarding@resend.dev` for testing (own address only)
-- [ ] API Keys → Create API Key → copy the value
-- [ ] Set `RESEND_API_KEY` in Azure Container Apps environment (Portal → Container App → Environment variables)
-- [ ] Set `RESEND_FROM` to a verified sender, e.g. `MAI News <digest@yourdomain.com>`
+---
 
-### GitHub Actions (Task 8)
-- [ ] Go to GitHub repo → Settings → Secrets and variables → Actions → New repository secret
-- [ ] Add `BACKEND_URL` — your Azure Container Apps URL (e.g. `https://your-app.azurecontainerapps.io`)
-- [ ] Add `WORKER_SHARED_SECRET` — same value as `WORKER_SHARED_SECRET` in `backend/.env`
-- [ ] Delete `.github/workflows/digest-cron.yml.disabled`
-- [ ] Test digest cron: Actions tab → "Run digest worker" → Run workflow
-- [ ] Test ingest cron: Actions tab → "Run ingest pipeline" → Run workflow
+### Step 1 — Set up Resend
+
+1. Go to **https://resend.com** → click **Get Started** → sign up with your email
+2. Verify your email address (Resend sends a confirmation link)
+3. In the Resend dashboard, go to **API Keys** → **Create API Key**
+   - Name: `MAI News`
+   - Permission: Full access
+   - Click **Add** → **copy the key immediately** (only shown once)
+4. For the sender address, you have two options:
+   - **Testing only:** use `onboarding@resend.dev` as `RESEND_FROM` — but you can only send to your own verified email address
+   - **Proper setup:** go to **Domains** → **Add Domain** → enter your domain → add the DNS records it shows you → wait for verification (usually a few minutes)
+   - Once domain is verified, use `MAI News <digest@yourdomain.com>` as `RESEND_FROM`
+
+---
+
+### Step 2 — Add Resend credentials to Azure
+
+1. Go to **https://portal.azure.com**
+2. Search for **Container Apps** in the top search bar → open your MAI News backend app
+3. In the left sidebar → **Settings** → **Environment variables**
+4. Click **Add** and add these two variables:
+   - Name: `RESEND_API_KEY` | Value: *(the key you copied in Step 1)*
+   - Name: `RESEND_FROM` | Value: `MAI News <digest@yourdomain.com>` *(or `onboarding@resend.dev` for testing)*
+5. Click **Save** → the container will restart automatically (takes ~30 seconds)
+
+---
+
+### Step 3 — Add GitHub Actions secrets
+
+1. Go to your GitHub repo → **Settings** tab (top of repo page)
+2. Left sidebar → **Secrets and variables** → **Actions**
+3. Click **New repository secret** and add these one at a time:
+
+   | Name | Value |
+   |---|---|
+   | `BACKEND_URL` | Your Azure Container Apps URL, e.g. `https://your-app.azurecontainerapps.io` |
+   | `WORKER_SHARED_SECRET` | The value of `WORKER_SHARED_SECRET` from your `backend/.env` file |
+
+   > To find your Azure URL: Portal → Container Apps → your app → **Overview** → copy the **Application URL**
+
+---
+
+### Step 4 — Delete the old disabled workflow
+
+In your repo, delete this file:
+```
+.github/workflows/digest-cron.yml.disabled
+```
+You can do it in the GitHub UI (open the file → click the trash icon) or locally:
+```bash
+git rm .github/workflows/digest-cron.yml.disabled
+git commit -m "chore: remove deprecated digest-cron disabled workflow"
+```
+
+---
+
+### Step 5 — Merge tier3 into main and redeploy
+
+```bash
+git checkout main
+git merge tier3
+git push origin main
+```
+
+This triggers `deploy-backend.yml` automatically — GitHub Actions will build a new Docker image and deploy it to Azure with the new Resend email code. Watch the **Actions** tab to confirm it succeeds.
+
+---
+
+### Step 6 — Test the cron workflows manually
+
+Once the deploy is done:
+
+1. GitHub repo → **Actions** tab
+2. Left sidebar → **Run ingest pipeline** → **Run workflow** → **Run workflow** (green button)
+   - Watch the logs — it should POST to `/internal/run-ingest` and return a JSON summary
+3. Left sidebar → **Run digest worker** → **Run workflow** → **Run workflow**
+   - Watch the logs — it should POST to `/internal/run-digest-worker`
+   - Check your email (the one in the database) for a test digest
+
+If both workflows show a green checkmark, everything is live and working.
