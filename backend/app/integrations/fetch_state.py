@@ -3,14 +3,12 @@ Persist the RSS fetcher's per-source watermarks across Container Apps
 restarts (L4).
 
 Container Apps with scale-to-zero recycles the container between cron
-fires. The fetcher (llm_engineering/src/ingestion/fetcher.py) writes
-state to a JSON file on disk, which evaporates with the container.
-Without this bridge, every cold start re-fetches "everything new since
-beginning of time" on every source — wasteful and risks RSS rate limits.
+fires. The fetcher (app/pipeline/ingestion/fetcher.py) writes state to
+a JSON file on disk, which evaporates with the container. Without this
+bridge, every cold start re-fetches everything — wasteful and risky.
 
 Approach: bracket each pipeline run with restore/save. The fetcher
-itself still does file I/O (no llm_engineering changes needed beyond
-honouring an env var for the path); we just snapshot the file to / from
+itself still does file I/O (honours the FETCH_STATE_PATH env var); we just snapshot the file to / from
 Postgres around the call.
 
   context-manager usage:

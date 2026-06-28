@@ -23,18 +23,19 @@ export const SIGNUP_DELIVERY = [
   { id: 'breaking', label: 'Breaking-news alerts',note: 'Only when your keywords show up' },
 ]
 
+// IDs match the 'regional' taxonomy slugs from sources.json tags_taxonomy.
 export const REGIONS_AUTH = [
-  { id: 'na',    label: 'North America' },
-  { id: 'eu',    label: 'Europe' },
-  { id: 'china', label: 'Greater China' },
-  { id: 'apac',  label: 'Asia Pacific' },
-  { id: 'india', label: 'India' },
-  { id: 'latam', label: 'Latin America' },
-  { id: 'mea',   label: 'Middle East & Africa' },
+  { id: 'north_america',     label: 'North America' },
+  { id: 'europe',            label: 'Europe' },
+  { id: 'greater_china',     label: 'Greater China' },
+  { id: 'asia_pacific',      label: 'Asia Pacific' },
+  { id: 'india',             label: 'India' },
+  { id: 'latin_america',     label: 'Latin America' },
+  { id: 'middle_east_africa', label: 'Middle East & Africa' },
 ]
 
 export const MOCK_MS_ACCOUNTS: MockAccount[] = [
-  { name: 'Eve Sandoval', email: 'eve.sandoval@microsoft.com', department: 'Cloud + AI', region: 'eu',    initial: 'e', color: '#0078D4' },
-  { name: 'Daniel Kim',   email: 'daniel.kim@microsoft.com',   department: 'Azure',      region: 'na',    initial: 'd', color: '#7FBA00' },
-  { name: 'Priya Iyer',   email: 'priya.iyer@microsoft.com',   department: 'Research',   region: 'india', initial: 'p', color: '#F25022' },
+  { name: 'Eve Sandoval', email: 'eve.sandoval@microsoft.com', department: 'Cloud + AI', region: 'europe',        initial: 'e', color: '#0078D4' },
+  { name: 'Daniel Kim',   email: 'daniel.kim@microsoft.com',   department: 'Azure',      region: 'north_america', initial: 'd', color: '#7FBA00' },
+  { name: 'Priya Iyer',   email: 'priya.iyer@microsoft.com',   department: 'Research',   region: 'india',         initial: 'p', color: '#F25022' },
 ]

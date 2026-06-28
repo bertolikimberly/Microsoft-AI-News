@@ -47,17 +47,26 @@ export default function PrefsDeck({ open, onClose, palette, displayFont, newsFon
   }
 
   const handleFinish = async () => {
+    // 'breaking' is UI-only — map to 'daily' for the API
+    const apiFrequency = prefs.delivery?.[0] === 'breaking'
+      ? 'daily'
+      : (prefs.delivery?.[0] as 'daily' | 'weekdays' | 'weekly') ?? 'weekly'
     try {
       await putPreferences({
         topics: prefs.topics ?? [],
         regions: prefs.region ? [prefs.region] : [],
         role: prefs.role ?? null,
-        frequency: (prefs.delivery?.[0] as 'daily' | 'weekdays' | 'weekly') ?? 'weekly',
+        frequency: apiFrequency,
         length: (prefs.depth as 'short' | 'standard' | 'deep') ?? 'standard',
         tone: (prefs.tone as 'technical' | 'business' | 'executive') ?? 'technical',
       })
-    } catch { /* best-effort — continue to summary even if API is down */ }
-    setShowSummary(true)
+    } catch { /* best-effort — prefs live in local state even if API is down */ }
+
+    if (folderMode) {
+      setShowSummary(true)
+    } else {
+      onSave()  // closes the modal and triggers dashboard re-fetch via prefs.topics
+    }
   }
 
   const confirmCreateFolder = () => {

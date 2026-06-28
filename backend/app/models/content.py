@@ -19,7 +19,6 @@ app.seed.seed_tags.
 import uuid
 from datetime import datetime, timezone
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
     ForeignKey,
@@ -29,8 +28,8 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
 
+from pgvector.sqlalchemy import Vector
 from app.config import settings
 from app.db.base import Base
 
@@ -128,16 +127,14 @@ class Article(Base):
     # Full cleaned article text — used for embedding + LLM summarisation.
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Compliance + traceability
     rss_feed_url: Mapped[str | None] = mapped_column(String, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     original_language: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # pgvector embedding (384 dims = all-MiniLM-L6-v2).
-    # Written by the data-engineering pipeline at ingestion time.
-    # The LLM/digest side never regenerates embeddings — it only reads.
+    # pgvector embedding — dimension from effective_embedding_dim (384 for local
+    # all-MiniLM-L6-v2, 768 when EMBEDDING_PROVIDER=gemini with text-embedding-004).
     embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(settings.embedding_dim), nullable=True
+        Vector(settings.effective_embedding_dim), nullable=True
     )
 
     source: Mapped["Source"] = relationship()

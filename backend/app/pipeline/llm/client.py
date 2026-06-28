@@ -18,8 +18,8 @@ from abc import ABC, abstractmethod
 import anthropic
 import openai as openai_sdk
 
-from src.models import TokenUsage
-from config.settings import settings
+from app.pipeline.models import TokenUsage
+from app.config import settings
 
 
 # ---------------------------------------------------------------------------
@@ -229,14 +229,94 @@ class _OpenAIClient(_BaseLLMClient):
 
 
 # ---------------------------------------------------------------------------
+# Gemini provider
+# ---------------------------------------------------------------------------
+
+class _GeminiClient(_BaseLLMClient):
+    # Gemini 2.0 Flash is free-tier with generous limits.
+    # Prompt caching is automatic (context cache API available but not needed for MVP).
+    _INPUT_PRICE = 0.075 / 1_000_000   # $0.075 per 1M input tokens (≤128k)
+    _OUTPUT_PRICE = 0.30 / 1_000_000   # $0.30 per 1M output tokens
+
+    def __init__(self):
+        if not settings.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not set")
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        self._genai = genai
+
+    def complete(
+        self,
+        system: str,
+        messages: list[dict],
+        model: str | None = None,
+        max_tokens: int = 1500,
+        use_cache: bool = True,
+    ) -> tuple[str, TokenUsage]:
+        import google.generativeai as genai
+        model_name = model or settings.gemini_model
+        m = genai.GenerativeModel(model_name, system_instruction=system)
+        # Convert OpenAI-style messages to Gemini format
+        history = []
+        for msg in messages[:-1]:
+            role = "model" if msg["role"] == "assistant" else "user"
+            history.append({"role": role, "parts": [msg["content"]]})
+        last = messages[-1]["content"] if messages else ""
+        chat = m.start_chat(history=history)
+        response = chat.send_message(
+            last,
+            generation_config=genai.GenerationConfig(max_output_tokens=max_tokens),
+        )
+        usage = response.usage_metadata
+        return response.text, TokenUsage(
+            input_tokens=usage.prompt_token_count,
+            output_tokens=usage.candidates_token_count,
+        )
+
+    def complete_fast(self, system, messages, max_tokens=512):
+        return self.complete(system, messages, model=settings.gemini_fast_model, max_tokens=max_tokens)
+
+    def stream_complete(self, system, messages, model=None, max_tokens=1500):
+        import google.generativeai as genai
+        model_name = model or settings.gemini_model
+        m = genai.GenerativeModel(model_name, system_instruction=system)
+        history = []
+        for msg in messages[:-1]:
+            role = "model" if msg["role"] == "assistant" else "user"
+            history.append({"role": role, "parts": [msg["content"]]})
+        last = messages[-1]["content"] if messages else ""
+        chat = m.start_chat(history=history)
+        response = chat.send_message(
+            last,
+            generation_config=genai.GenerationConfig(max_output_tokens=max_tokens),
+            stream=True,
+        )
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text, None
+        # Emit final usage
+        try:
+            final = response.resolve()
+            u = final.usage_metadata
+            yield "", TokenUsage(
+                input_tokens=u.prompt_token_count,
+                output_tokens=u.candidates_token_count,
+            )
+        except Exception:
+            yield "", TokenUsage()
+
+
+# ---------------------------------------------------------------------------
 # Factory — this is what all callers import
 # ---------------------------------------------------------------------------
 
 def LLMClient() -> _BaseLLMClient:
-    """Return the configured LLM client. Set LLM_PROVIDER=openai to use OpenAI."""
+    """Return the configured LLM client based on LLM_PROVIDER env var."""
     provider = settings.llm_provider.lower()
     if provider == "openai":
         return _OpenAIClient()
     if provider == "anthropic":
         return _AnthropicClient()
-    raise ValueError(f"Unknown LLM_PROVIDER '{provider}'. Choose 'anthropic' or 'openai'.")
+    if provider == "gemini":
+        return _GeminiClient()
+    raise ValueError(f"Unknown LLM_PROVIDER '{provider}'. Choose 'openai', 'anthropic', or 'gemini'.")

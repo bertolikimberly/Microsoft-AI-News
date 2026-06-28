@@ -1,10 +1,8 @@
 """
 Source registry — loads sources.json and exposes filtered views.
 
-Canonical source: the repo-root sources.json (shared with the data team
-and the backend's `seed_sources`). Falls back to llm_engineering/config/
-sources.json if the root file is absent (useful when the pipeline runs
-standalone outside the monorepo).
+Canonical source: the repo-root sources.json (shared with the backend's
+`seed_sources`). Falls back to a local config copy if absent.
 
 Tags are stored as slugs (e.g. "artificial_intelligence_ml") derived
 from the human labels in sources.json via the same `tag_slug` rule the
@@ -21,9 +19,10 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Optional
 
-from src.models import UserProfile
+from app.pipeline.models import UserProfile
 
 # Prefer repo-root sources.json; fall back to local config copy
+# File lives at <root>/app/pipeline/ingestion/source_registry.py — 4 dirname calls reach <root>
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 _ROOT_SOURCES = os.path.join(_REPO_ROOT, "sources.json")
 _LOCAL_SOURCES = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "sources.json")
