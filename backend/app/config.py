@@ -110,11 +110,11 @@ class Settings(BaseSettings):
     openai_model_small: str = "gpt-4o-mini"
     openai_model_large: str = "gpt-4o"
 
-    # ─── Email (Resend) ───────────────────────────────────────────────────
-    # https://resend.com — 3,000 emails/month free, no card required.
-    # RESEND_FROM must be a verified sender address or domain.
-    resend_api_key: str = ""
-    resend_from: str = "Tech Intel News <noreply@example.com>"
+    # ─── Email (Azure Communication Services) ─────────────────────────────
+    # Connection string + sender address come from the
+    # Microsoft.Communication/communicationServices resource (Bicep).
+    acs_connection_string: str = ""
+    acs_sender_address: str = ""
 
     # ─── Internal worker auth ─────────────────────────────────────────────
     # Shared secret used to authenticate calls to /api/v1/internal/*
