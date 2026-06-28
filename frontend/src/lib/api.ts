@@ -24,6 +24,10 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(init.headers ?? {}) },
   })
   if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null)
+      window.dispatchEvent(new CustomEvent('mai:session-expired'))
+    }
     const body = await res.json().catch(() => ({}))
     throw new Error(body?.title ?? `HTTP ${res.status}`)
   }

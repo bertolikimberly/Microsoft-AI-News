@@ -1,16 +1,10 @@
 """
 pgvector-backed article store.
 
-Replaces the standalone ChromaDB implementation from llm_engineering with
-a backend-owned store that writes embeddings into the same `articles`
-table the rest of the backend reads from. The article row is the source
-of truth; the vector column is just another field on it.
+Writes embeddings into the shared `articles` table so the API, pipeline,
+and workers all read from one source of truth.
 
-Interface matches the LLM pipeline's expectations (index_articles +
-retrieve), so it can be passed in via `NewsPipeline(vector_store=...)`
-without changing pipeline orchestration. Filtering uses the backend's
-multi-dimensional (dimension, slug) tag vocabulary directly — no flat
-category translation.
+Compatible with `NewsPipeline(vector_store=...)` — pass a stub in tests.
 """
 from __future__ import annotations
 
@@ -26,19 +20,13 @@ from app.db.session import SessionLocal
 from app.models import Article as ArticleORM
 from app.models import ArticleTag, Source, Tag
 
-# These come from the sibling llm_engineering tree; importing this module
-# implies the integrations bootstrap has already run.
-from src.models import Article as PipelineArticle
+from app.pipeline.models import Article as PipelineArticle
 
 log = logging.getLogger(__name__)
 
 
 class ArticleVectorStore:
     """
-    pgvector-backed implementation. API-compatible with the Chroma version
-    in llm_engineering/src/rag/vector_store.py so the pipeline can swap
-    transparently.
-
     `retrieve` accepts an optional `topic_filter: list[str]` of topic-tag
     slugs to constrain results; pass any dimension's slugs via the more
     general `tag_filter: list[tuple[dimension, slug]]` if you need
@@ -83,12 +71,15 @@ class ArticleVectorStore:
     ) -> list[tuple[PipelineArticle, float]]:
         """
         Return (article, cosine_similarity) pairs, highest similarity first.
+        When COHERE_API_KEY is set, reranks the initial vector candidates.
 
         `topic_filter` limits to articles tagged with any of the given
         topic-dimension slugs. `tag_filter` is the general form —
         list of (dimension, slug) pairs joined as OR.
         """
         query_embedding = self._encode([query])[0]
+        # Fetch more candidates than needed so the reranker has room to select.
+        fetch_k = top_k * 3 if settings.cohere_api_key else top_k
 
         # Normalise filters into a single (dimension, slug) list.
         pairs: list[tuple[str, str]] = list(tag_filter or [])
@@ -125,19 +116,55 @@ class ArticleVectorStore:
                 from sqlalchemy import union
                 stmt = stmt.where(ArticleORM.id.in_(union(*clauses)))
 
-            stmt = stmt.order_by("distance").limit(top_k)
+            stmt = stmt.order_by("distance").limit(fetch_k)
 
-            results: list[tuple[PipelineArticle, float]] = []
+            candidates: list[tuple[PipelineArticle, float]] = []
             for row, distance in db.execute(stmt).all():
                 similarity = round(1.0 - float(distance), 4)
-                results.append((_orm_to_pipeline(row), similarity))
-            return results
+                candidates.append((_orm_to_pipeline(row), similarity))
+
+        if settings.cohere_api_key and len(candidates) > top_k:
+            candidates = _cohere_rerank(query, candidates, top_k)
+
+        return candidates[:top_k]
+
+
+def _cohere_rerank(
+    query: str,
+    candidates: list[tuple[PipelineArticle, float]],
+    top_k: int,
+) -> list[tuple[PipelineArticle, float]]:
+    """Rerank candidates with Cohere — improves precision over pure cosine similarity."""
+    try:
+        import cohere
+        co = cohere.ClientV2(api_key=settings.cohere_api_key)
+        docs = [f"{a.title}\n{(a.content or '')[:400]}" for a, _ in candidates]
+        response = co.rerank(
+            model="rerank-english-v3.0",
+            query=query,
+            documents=docs,
+            top_n=top_k,
+        )
+        reranked = []
+        for r in response.results:
+            article, _ = candidates[r.index]
+            reranked.append((article, round(r.relevance_score, 4)))
+        return reranked
+    except Exception:
+        log.warning("Cohere reranking failed; falling back to vector order")
+        return candidates[:top_k]
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
+        provider = settings.embedding_provider.lower()
+        if provider == "gemini":
+            return self._encode_gemini(texts)
+        return self._encode_local(texts)
+
+    def _encode_local(self, texts: list[str]) -> list[list[float]]:
         if self._encoder is None:
             self._encoder = SentenceTransformer(settings.embedding_model)
         return self._encoder.encode(
@@ -145,6 +172,16 @@ class ArticleVectorStore:
             normalize_embeddings=True,
             show_progress_bar=False,
         ).tolist()
+
+    def _encode_gemini(self, texts: list[str]) -> list[list[float]]:
+        import google.generativeai as genai
+        genai.configure(api_key=settings.gemini_api_key)
+        result = genai.embed_content(
+            model=f"models/{settings.gemini_embedding_model}",
+            content=texts,
+            task_type="retrieval_document",
+        )
+        return result["embedding"] if len(texts) == 1 else [r for r in result["embedding"]]
 
     @staticmethod
     def _embed_text(article: PipelineArticle) -> str:
@@ -183,6 +220,7 @@ class ArticleVectorStore:
             extract=article.summary or (article.content[:280] if article.content else None),
             body=article.content,
             embedding=embedding,
+            original_language=article.original_language,
         )
         db.add(row)
         db.flush()

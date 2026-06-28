@@ -1,17 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { listArticles } from '@/lib/api'
+import { listArticles, type ApiArticle } from '@/lib/api'
 import { FONTS } from '@/constants/fonts'
 import type { Palette } from '@/types'
-
-interface ArticleRow {
-  id: string
-  title: string
-  source: string
-  time: string
-  topics: string[]
-}
 
 interface Props {
   palette: Palette
@@ -20,94 +12,262 @@ interface Props {
   onAsk: (q: string) => void
 }
 
+const TOPIC_LABELS: Record<string, string> = {
+  artificial_intelligence_ml: 'AI & ML',
+  software_development: 'Software',
+  cloud_infrastructure: 'Cloud',
+  hardware_chips: 'Hardware',
+  cybersecurity: 'Security',
+  health_biotech: 'Biotech',
+  metaverse_xr: 'XR',
+  quantum_computing: 'Quantum',
+  fintech: 'Fintech',
+  robotics: 'Robotics',
+  sustainability_tech: 'Sustainability',
+  media_entertainment: 'Media',
+  enterprise_software: 'Enterprise',
+  policy_regulation: 'Policy',
+}
+
+function labelForSlug(slug: string): string {
+  if (TOPIC_LABELS[slug]) return TOPIC_LABELS[slug]
+  return slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function relativeTime(isoStr: string): string {
+  const d = new Date(isoStr)
+  const diffMs = Date.now() - d.getTime()
+  const h = Math.floor(diffMs / 3600000)
+  if (h < 1) return 'Just now'
+  if (h < 24) return `${h}h ago`
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+interface CardProps {
+  article: ApiArticle
+  onAsk: (q: string) => void
+  palette: Palette
+  displayFont: string
+  variant: 'featured' | 'side' | 'grid'
+}
+
+function ArticleCard({ article, onAsk, palette, displayFont, variant }: CardProps) {
+  const [hovered, setHovered] = useState(false)
+  const isFeatured = variant === 'featured'
+  const isSide = variant === 'side'
+
+  return (
+    <div
+      className={`dash2-card${isFeatured ? ' dash2-card--featured' : ''}${isSide ? ' dash2-card--side' : ''}`}
+      style={{
+        background: hovered ? palette.cardBg : 'rgba(255,253,247,0.38)',
+        borderColor: hovered ? 'rgba(0,0,0,0.13)' : 'rgba(0,0,0,0.07)',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="dash2-card-head">
+        <span className="dash2-source" style={{ color: palette.accent }}>
+          {article.source.toUpperCase()}
+        </span>
+        <span className="dash2-time" style={{ color: palette.muted }}>
+          {article.published_at ? relativeTime(article.published_at) : ''}
+        </span>
+      </div>
+
+      <p
+        className={`dash2-card-title${isFeatured ? ' dash2-card-title--featured' : ''}${isSide ? ' dash2-card-title--side' : ''}`}
+        style={{ fontFamily: FONTS[displayFont], color: palette.ink }}
+      >
+        {article.title}
+      </p>
+
+      {article.extract && !isSide && (
+        <p
+          className={`dash2-card-extract${isFeatured ? ' dash2-card-extract--featured' : ''}`}
+          style={{ color: palette.muted }}
+        >
+          {article.extract}
+        </p>
+      )}
+
+      <div className="dash2-card-foot">
+        <div className="dash2-topics">
+          {article.topics.slice(0, isFeatured ? 3 : 2).map((t) => (
+            <span
+              key={t}
+              className="dash2-topic-pill"
+              style={{ background: 'rgba(0,0,0,0.055)', color: palette.muted }}
+            >
+              {labelForSlug(t)}
+            </span>
+          ))}
+        </div>
+
+        <button
+          className="dash2-ask-btn"
+          onClick={() => onAsk(`Tell me more about: ${article.title}`)}
+          style={{
+            color: hovered ? palette.accent : 'transparent',
+            borderColor: hovered ? palette.accent : 'transparent',
+          }}
+        >
+          Ask MAI →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Skeleton({ palette }: { palette: Palette }) {
+  const shim = { background: `${palette.muted}18` }
+  return (
+    <div className="dash2-bento">
+      <div className="dash2-skel-featured" style={shim} />
+      <div className="dash2-side-grid">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="dash2-skel-card" style={{ ...shim, animationDelay: `${i * 0.1}s` }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardView({ palette, displayFont, userTopics, onAsk }: Props) {
-  const [articles, setArticles] = useState<ArticleRow[]>([])
+  const [allArticles, setAllArticles] = useState<ApiArticle[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('all')
 
   const topicsKey = (userTopics ?? []).join(',')
 
+  // Fetch once per user-preference change; tab switching filters in memory
   useEffect(() => {
     setLoading(true)
-    listArticles({ limit: 24, topics: userTopics?.length ? userTopics : undefined })
-      .then((data) =>
-        setArticles(
-          data.map((a) => ({
-            id: a.id,
-            title: a.title,
-            source: a.source,
-            time: a.published_at
-              ? new Date(a.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              : '',
-            topics: a.topics ?? [],
-          }))
-        )
-      )
-      .catch(() => {})
+    setError('')
+    const filterTopics = userTopics?.length ? userTopics : undefined
+    listArticles({ limit: 50, topics: filterTopics })
+      .then(setAllArticles)
+      .catch((e: Error) => setError(e?.message ?? 'Could not load articles.'))
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicsKey])
 
-  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const articles =
+    activeTab === 'all'
+      ? allArticles
+      : allArticles.filter((a) => a.topics.includes(activeTab))
+
+  // Derive tabs from all fetched articles
+  const topicCounts = allArticles.reduce<Record<string, number>>((acc, a) => {
+    a.topics.forEach((t) => { acc[t] = (acc[t] ?? 0) + 1 })
+    return acc
+  }, {})
+  const topTabs = Object.entries(topicCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([slug]) => slug)
+
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
 
   const [featured, ...rest] = articles
+  const sideCards = rest.slice(0, 4)
+  const gridCards = rest.slice(4)
 
   return (
-    <div className="dash-wrap">
-      <div className="dash-header">
-        <p className="dash-date" style={{ color: palette.muted }}>{dateStr}</p>
-        <h1 className="dash-title" style={{ fontFamily: FONTS[displayFont], color: palette.ink }}>
-          Today's Intelligence
-        </h1>
-        <p className="dash-sub" style={{ color: palette.muted }}>
-          Latest stories from across the tech landscape
-        </p>
+    <div className="dash2-wrap">
+      {/* Header */}
+      <div className="dash2-header">
+        <div>
+          <p className="dash2-date" style={{ color: palette.muted }}>{dateStr}</p>
+          <h1 className="dash2-title" style={{ fontFamily: FONTS[displayFont], color: palette.ink }}>
+            Today&apos;s Intelligence
+          </h1>
+          {!loading && articles.length > 0 && (
+            <p className="dash2-count" style={{ color: palette.muted }}>
+              {articles.length} stories
+            </p>
+          )}
+        </div>
       </div>
 
-      {loading && (
-        <p className="dash-empty" style={{ color: palette.muted }}>Loading…</p>
+      {/* Topic tabs */}
+      {topTabs.length > 0 && (
+        <div className="dash2-tabs">
+          <button
+            className={`dash2-tab${activeTab === 'all' ? ' dash2-tab--active' : ''}`}
+            onClick={() => setActiveTab('all')}
+            style={{
+              color: activeTab === 'all' ? palette.ink : palette.muted,
+              borderBottomColor: activeTab === 'all' ? palette.accent : 'transparent',
+            }}
+          >
+            All
+          </button>
+          {topTabs.map((slug) => (
+            <button
+              key={slug}
+              className={`dash2-tab${activeTab === slug ? ' dash2-tab--active' : ''}`}
+              onClick={() => setActiveTab(slug)}
+              style={{
+                color: activeTab === slug ? palette.ink : palette.muted,
+                borderBottomColor: activeTab === slug ? palette.accent : 'transparent',
+              }}
+            >
+              {labelForSlug(slug)}
+            </button>
+          ))}
+        </div>
       )}
 
-      {!loading && articles.length === 0 && (
-        <p className="dash-empty" style={{ color: palette.muted }}>
-          No articles yet — check back once ingestion runs.
+      {/* Loading */}
+      {loading && <Skeleton palette={palette} />}
+
+      {/* Error */}
+      {!loading && error && (
+        <p className="dash2-empty" style={{ color: palette.muted }}>{error}</p>
+      )}
+
+      {/* Empty */}
+      {!loading && !error && articles.length === 0 && (
+        <p className="dash2-empty" style={{ color: palette.muted }}>
+          No articles yet — run ingest first.
         </p>
       )}
 
+      {/* Content */}
       {!loading && featured && (
         <>
-          {/* Featured / lead story */}
-          <button
-            className="dash-featured"
-            onClick={() => onAsk(`Tell me more about: ${featured.title}`)}
-            style={{ borderColor: 'rgba(0,0,0,0.07)' }}
-          >
-            <span className="dash-featured-meta" style={{ color: palette.muted }}>
-              {featured.source} · {featured.time}
-            </span>
-            <span className="dash-featured-title" style={{ color: palette.ink, fontFamily: FONTS[displayFont] }}>
-              {featured.title}
-            </span>
-            <span className="dash-cta" style={{ color: palette.accent }}>Ask MAI →</span>
-          </button>
+          {/* Bento hero */}
+          <div className="dash2-bento">
+            <ArticleCard
+              article={featured}
+              onAsk={onAsk}
+              palette={palette}
+              displayFont={displayFont}
+              variant="featured"
+            />
+            {sideCards.length > 0 && (
+              <div className="dash2-side-grid">
+                {sideCards.map((a) => (
+                  <ArticleCard key={a.id} article={a} onAsk={onAsk} palette={palette} displayFont={displayFont} variant="side" />
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* Rest of articles in a list */}
-          {rest.length > 0 && (
-            <ul className="dash-list">
-              {rest.map((a, i) => (
-                <li key={a.id} className={`dash-item ${i === 0 ? 'dash-item-first' : ''}`}>
-                  <button
-                    className="dash-article"
-                    onClick={() => onAsk(`Tell me more about: ${a.title}`)}
-                    style={{ color: palette.ink }}
-                  >
-                    <span className="dash-article-meta" style={{ color: palette.muted }}>
-                      {a.source} · {a.time}
-                    </span>
-                    <span className="dash-article-title">{a.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          {/* Grid of remaining articles */}
+          {gridCards.length > 0 && (
+            <>
+              <div className="dash2-section-label" style={{ color: palette.muted }}>More stories</div>
+              <div className="dash2-grid">
+                {gridCards.map((a) => (
+                  <ArticleCard key={a.id} article={a} onAsk={onAsk} palette={palette} displayFont={displayFont} variant="grid" />
+                ))}
+              </div>
+            </>
           )}
         </>
       )}

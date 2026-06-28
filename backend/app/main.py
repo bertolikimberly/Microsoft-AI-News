@@ -12,12 +12,17 @@ Run locally:
 OpenAPI docs at http://localhost:8000/docs once running.
 """
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+log = logging.getLogger(__name__)
 
 # Importing `app.models` registers all ORM classes on `Base.metadata`,
 # so `create_all` below sees every table. Without this import the tables
@@ -25,7 +30,7 @@ from fastapi.responses import JSONResponse
 from app import models  # noqa: F401
 from app.config import settings
 from app.db.base import Base
-from app.db.session import SessionLocal, engine
+from app.db.session import SessionLocal, engine  # noqa: F401 (engine used by create_all)
 from app.errors import PROBLEM_CONTENT_TYPE, problem_response
 from app.routers import articles as articles_router
 from app.routers import auth as auth_router
@@ -41,49 +46,36 @@ from app.routers import tags as tags_router
 from app.seed import seed_sources, seed_tags
 
 
+async def _daily_ingest_loop():
+    """Runs the ingest pipeline once per day at 6 AM UTC."""
+    while True:
+        now = datetime.now(timezone.utc)
+        next_run = now.replace(hour=6, minute=0, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+        wait_seconds = (next_run - now).total_seconds()
+        log.info("daily ingest scheduled in %.0f seconds (next run: %s)", wait_seconds, next_run.isoformat())
+        await asyncio.sleep(wait_seconds)
+        try:
+            from app.workers import ingest_worker
+            log.info("daily ingest starting")
+            result = ingest_worker.run()
+            log.info("daily ingest complete: %s", result)
+        except Exception:
+            log.exception("daily ingest task failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Runs once at app startup (before handling requests) and once at shutdown.
-
-    Today: enable pgvector, create tables if they don't exist, create the
-    ANN index on articles.embedding, seed taxonomy + sources. Replace
-    `create_all` with Alembic migrations before any prod deploy — auto-create
-    won't catch schema drift.
-
-    pgvector note: `CREATE EXTENSION IF NOT EXISTS vector` succeeds against
-    local Docker (pgvector image), Neon (pre-enabled), and Azure Postgres
-    Flexible Server provided `vector` is allowlisted in the
-    `azure.extensions` server parameter. If the user role lacks privileges
-    we surface the error rather than silently degrading — vector search is
-    load-bearing for chat + ranking.
-    """
-    from sqlalchemy import text
-
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.commit()
-
     Base.metadata.create_all(bind=engine)
 
-    # ANN index on the embedding column. ivfflat is good enough at MVP
-    # scale (sub-100k rows); revisit hnsw once the archive grows.
-    with engine.connect() as conn:
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS articles_embedding_ivfflat "
-            "ON articles USING ivfflat (embedding vector_cosine_ops) "
-            "WITH (lists = 100)"
-        ))
-        conn.commit()
-
-    # The tag taxonomy and source registry are required by the prefs UI on
-    # day one, so seed both at every boot. The seeds are idempotent —
-    # existing rows are untouched.
     with SessionLocal() as db:
         seed_tags(db)
         seed_sources(db)
+
+    task = asyncio.create_task(_daily_ingest_loop())
     yield
-    # No shutdown work yet.
+    task.cancel()
 
 
 app = FastAPI(
