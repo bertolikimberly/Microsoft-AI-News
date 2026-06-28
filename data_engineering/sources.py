@@ -49,13 +49,26 @@ def _to_legacy_shape(s: dict) -> dict:
 
 
 # The list the pipeline imports. Built once at module load.
-RSS_FEEDS: list[dict] = [_to_legacy_shape(s) for s in _load()]
+RSS_FEEDS: list[dict] = [
+    _to_legacy_shape(s)
+    for s in _load()
+    if s.get("enabled", True)            # skip soft-disabled sources
+    and s.get("rss_url") != "GDELT_API"  # GDELT uses its own client, not feedparser
+]
 
 
 # ── Helper accessors (use these in new code) ─────────────────────────
-def get_all_sources() -> list[dict]:
-    """Return raw source records from sources.json (full schema)."""
-    return list(_load())
+def get_all_sources(include_disabled: bool = False) -> list[dict]:
+    """
+    Return raw source records from sources.json (full schema).
+    By default skips soft-disabled sources; pass include_disabled=True
+    to get everything (e.g. for the DB source-registry upsert, which
+    should still record disabled sources so their watermarks persist).
+    """
+    sources = list(_load())
+    if include_disabled:
+        return sources
+    return [s for s in sources if s.get("enabled", True)]
 
 
 def get_sources_by_tier(tier: str) -> list[dict]:
