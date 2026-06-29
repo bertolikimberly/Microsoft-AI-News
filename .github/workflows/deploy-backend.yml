@@ -69,12 +69,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Check Azure credentials
+        id: check-creds
+        run: |
+          if [ -n "$AZURE_CREDENTIALS" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "::notice::AZURE_CREDENTIALS not set — skipping Container App update."
+          fi
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Log in to Azure
+        if: steps.check-creds.outputs.available == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Roll Container App to new image
+        if: steps.check-creds.outputs.available == 'true'
         run: |
           az containerapp update \
             --name "${{ secrets.CONTAINER_APP_NAME }}" \
