@@ -51,9 +51,20 @@ export default function PrefsDeck({ open, onClose, palette, displayFont, newsFon
     const apiFrequency = prefs.delivery?.[0] === 'breaking'
       ? 'daily'
       : (prefs.delivery?.[0] as 'daily' | 'weekdays' | 'weekly') ?? 'weekly'
+
+    // Split the flat topics array back into the per-dimension buckets the backend expects.
+    // The UI stores all selections in prefs.topics but the API validates each slug
+    // against its own dimension ("topic", "business", "regulation_policy").
+    const all = prefs.topics ?? []
+    const topicSlugs = new Set(TOPIC_GROUPS.find(g => g.id === 'topic')?.items.map(i => i.id) ?? [])
+    const bizSlugs   = new Set(TOPIC_GROUPS.find(g => g.id === 'business')?.items.map(i => i.id) ?? [])
+    const regSlugs   = new Set(TOPIC_GROUPS.find(g => g.id === 'regulation')?.items.map(i => i.id) ?? [])
+
     try {
       await putPreferences({
-        topics: prefs.topics ?? [],
+        topics:          all.filter(t => topicSlugs.has(t)),
+        business_tags:   all.filter(t => bizSlugs.has(t)),
+        regulation_tags: all.filter(t => regSlugs.has(t)),
         regions: prefs.region ? [prefs.region] : [],
         role: prefs.role ?? null,
         frequency: apiFrequency,
