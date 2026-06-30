@@ -1,9 +1,11 @@
 {
   "metadata": {
-    "version": "2.0",
+    "version": "2.1",
     "created": "2026-05-28",
-    "description": "Microsoft AI News - canonical source registry. Final 35 free sources, region-tagged, paywalled sources removed. Source of truth for both data_engineering and llm_engineering ingestion.",
-    "total_sources": 42,
+    "updated": "2026-06-30",
+    "description": "Microsoft AI News - canonical source registry. Authoritative, English-language sources focused on AI, enterprise tech, cloud, and regulation. Paywalled and low-quality sources excluded.",
+    "total_sources": 54,
+    "active_sources": 46,
     "tags_taxonomy": {
       "topic": [
         "Artificial Intelligence & ML",
@@ -87,7 +89,7 @@
       "Middle East & Africa",
       "Global"
     ],
-    "notes": "v2.0: removed paywalled sources (Bloomberg, Economist, Sifted) and EU-heavy 'The Local' country feeds. Added APAC/China/India/LATAM/MEA regional coverage. GDELT covers gaps where dedicated English sources are sparse. 'region' = where the source is based/focused; 'region_tags' = Microsoft regions the content is most relevant to.",
+    "notes": "v2.1 (2026-06-30): Disabled 8 low-quality sources (personal blogs, state media, non-English, noisy aggregators, broken API). Added 12 authoritative sources: Microsoft-owned properties, VentureBeat AI, Wired, IEEE Spectrum, DeepMind, Hugging Face, ZDNet, CNBC Tech, InfoQ, MIT News AI. 'enabled=false' preserves watermarks.",
     "enabled_field": "Set enabled=false to soft-disable a source: it stays in the registry (watermarks preserved) but the fetcher and DB-sync skip it. Preferred over deletion."
   },
   "sources": [
@@ -98,12 +100,8 @@
       "rss_url": "https://www.technologyreview.com/feed/",
       "category": "Tech",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "breaking",
       "scrape_interval_min": 60,
@@ -115,7 +113,7 @@
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Deep long-form tech journalism.",
+      "notes": "Deep long-form tech journalism. One of the most credible AI/tech publications.",
       "enabled": true
     },
     {
@@ -125,25 +123,15 @@
       "rss_url": "https://techcrunch.com/feed/",
       "category": "Tech",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "breaking",
       "scrape_interval_min": 60,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML",
-        "Software Development"
-      ],
-      "default_business_tags": [
-        "Startups & Venture",
-        "M&A & Funding"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML", "Software Development"],
+      "default_business_tags": ["Startups & Venture", "M&A & Funding"],
       "default_regulation_tags": [],
-      "notes": "Startup and tech industry news.",
+      "notes": "Leading source for startup funding rounds and tech industry news.",
       "enabled": true
     },
     {
@@ -153,23 +141,15 @@
       "rss_url": "https://arstechnica.com/feed/",
       "category": "Tech",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "breaking",
       "scrape_interval_min": 60,
-      "default_topic_tags": [
-        "Software Development",
-        "Hardware & Chips",
-        "Cybersecurity"
-      ],
+      "default_topic_tags": ["Software Development", "Hardware & Chips", "Cybersecurity"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Technical depth, good for engineers.",
+      "notes": "Technical depth, strong on AI, security, and hardware. Excellent for engineers.",
       "enabled": true
     },
     {
@@ -179,23 +159,128 @@
       "rss_url": "https://www.theverge.com/rss/index.xml",
       "category": "Tech",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "excerpts",
+      "scrape_tier": "breaking",
+      "scrape_interval_min": 60,
+      "default_topic_tags": ["Artificial Intelligence & ML", "Hardware & Chips", "Metaverse & XR"],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Consumer and enterprise tech. RSS gives excerpts - needs full fetch.",
+      "enabled": true
+    },
+    {
+      "id": "wired",
+      "name": "Wired",
+      "homepage": "https://www.wired.com",
+      "rss_url": "https://www.wired.com/feed/rss",
+      "category": "Tech",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
       "scrape_tier": "breaking",
       "scrape_interval_min": 60,
       "default_topic_tags": [
         "Artificial Intelligence & ML",
+        "Cybersecurity",
+        "Hardware & Chips"
+      ],
+      "default_business_tags": [],
+      "default_regulation_tags": ["AI Regulation", "Data Protection (GDPR, DPDP, LGPD)"],
+      "notes": "Highly regarded mainstream tech journalism. Strong AI, security, and culture coverage.",
+      "enabled": true
+    },
+    {
+      "id": "venturebeat_ai",
+      "name": "VentureBeat AI",
+      "homepage": "https://venturebeat.com/ai/",
+      "rss_url": "https://venturebeat.com/ai/feed/",
+      "category": "Tech",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "breaking",
+      "scrape_interval_min": 60,
+      "default_topic_tags": [
+        "Artificial Intelligence & ML",
+        "Software Development",
+        "Cloud & Infrastructure"
+      ],
+      "default_business_tags": ["Startups & Venture", "M&A & Funding"],
+      "default_regulation_tags": [],
+      "notes": "Best dedicated AI/ML news publication. Covers models, products, enterprise AI, and funding.",
+      "enabled": true
+    },
+    {
+      "id": "ieee_spectrum",
+      "name": "IEEE Spectrum",
+      "homepage": "https://spectrum.ieee.org",
+      "rss_url": "https://spectrum.ieee.org/feeds/feed.rss",
+      "category": "Tech",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [
+        "Artificial Intelligence & ML",
         "Hardware & Chips",
-        "Metaverse & XR"
+        "Robotics & Automation",
+        "Quantum Computing"
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Consumer tech. RSS gives excerpts - needs full fetch.",
+      "notes": "The IEEE's flagship publication. Authoritative, peer-reviewed-adjacent technical reporting.",
+      "enabled": true
+    },
+    {
+      "id": "zdnet",
+      "name": "ZDNet",
+      "homepage": "https://www.zdnet.com",
+      "rss_url": "https://www.zdnet.com/news/rss.xml",
+      "category": "Tech",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [
+        "Artificial Intelligence & ML",
+        "Cloud & Infrastructure",
+        "Cybersecurity",
+        "Software Development"
+      ],
+      "default_business_tags": ["Big Tech (FAANG+Microsoft)"],
+      "default_regulation_tags": [],
+      "notes": "Strong enterprise IT and B2B tech coverage. Heavy Microsoft/Azure reporting.",
+      "enabled": true
+    },
+    {
+      "id": "cnbc_tech",
+      "name": "CNBC Technology",
+      "homepage": "https://www.cnbc.com/technology/",
+      "rss_url": "https://www.cnbc.com/id/19854910/device/rss/rss.html",
+      "category": "Business",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "breaking",
+      "scrape_interval_min": 60,
+      "default_topic_tags": ["Artificial Intelligence & ML", "Cloud & Infrastructure"],
+      "default_business_tags": [
+        "Big Tech (FAANG+Microsoft)",
+        "Earnings & Revenue",
+        "IPO & Markets",
+        "M&A & Funding"
+      ],
+      "default_regulation_tags": [],
+      "notes": "Financial and business angle on tech. Essential for earnings, M&A, and market-moving AI news.",
       "enabled": true
     },
     {
@@ -205,24 +290,15 @@
       "rss_url": "https://www.geekwire.com/feed/",
       "category": "Business",
       "source_type": "secondary",
-      "region": [
-        "North America"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["North America"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Cloud & Infrastructure"
-      ],
-      "default_business_tags": [
-        "Startups & Venture",
-        "Big Tech (FAANG+Microsoft)"
-      ],
+      "default_topic_tags": ["Cloud & Infrastructure"],
+      "default_business_tags": ["Startups & Venture", "Big Tech (FAANG+Microsoft)"],
       "default_regulation_tags": [],
-      "notes": "Seattle/Microsoft-region tech business news.",
+      "notes": "Seattle/Pacific Northwest tech. Excellent Microsoft, Amazon, and Boeing coverage.",
       "enabled": true
     },
     {
@@ -232,26 +308,15 @@
       "rss_url": "https://restofworld.org/feed/latest/",
       "category": "Business",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "Latin America",
-        "Middle East & Africa",
-        "Asia Pacific",
-        "India"
-      ],
+      "region": ["Global"],
+      "region_tags": ["Latin America", "Middle East & Africa", "Asia Pacific", "India"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": ["Startups & Venture"],
       "default_regulation_tags": [],
-      "notes": "Tech impact outside the West - key for non-US/EU regions.",
+      "notes": "Tech impact outside the US/EU. Best English source for emerging market tech.",
       "enabled": true
     },
     {
@@ -261,25 +326,73 @@
       "rss_url": "https://www.reutersagency.com/feed/?best-topics=tech",
       "category": "Business",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America",
-        "Europe"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
       "content_quality": "full",
       "scrape_tier": "breaking",
       "scrape_interval_min": 60,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "M&A & Funding",
-        "Earnings & Revenue"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": ["M&A & Funding", "Earnings & Revenue"],
       "default_regulation_tags": [],
-      "notes": "Wire service - high-trust breaking news.",
+      "notes": "Wire service - high-trust breaking news. Factual, unbiased.",
+      "enabled": true
+    },
+    {
+      "id": "infoq",
+      "name": "InfoQ",
+      "homepage": "https://www.infoq.com",
+      "rss_url": "https://feed.infoq.com/",
+      "category": "Engineering",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [
+        "Software Development",
+        "Artificial Intelligence & ML",
+        "Cloud & Infrastructure"
+      ],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "In-depth software engineering news. Strong on AI engineering, MLOps, cloud-native architecture.",
+      "enabled": true
+    },
+    {
+      "id": "stackoverflow_blog",
+      "name": "Stack Overflow Blog",
+      "homepage": "https://stackoverflow.blog",
+      "rss_url": "https://stackoverflow.blog/feed/",
+      "category": "Engineering",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML"],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Developer surveys, AI coding tool adoption data, and engineering best practices.",
+      "enabled": true
+    },
+    {
+      "id": "pragmatic_engineer",
+      "name": "The Pragmatic Engineer",
+      "homepage": "https://newsletter.pragmaticengineer.com",
+      "rss_url": "https://newsletter.pragmaticengineer.com/feed",
+      "category": "Engineering",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML"],
+      "default_business_tags": ["Big Tech (FAANG+Microsoft)", "Layoffs & Hiring"],
+      "default_regulation_tags": [],
+      "notes": "Top engineering newsletter. Deep dives into AI coding tools, big-tech eng culture, and the developer market.",
       "enabled": true
     },
     {
@@ -289,13 +402,8 @@
       "rss_url": "https://techpolicy.press/feed/",
       "category": "Regulation",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America",
-        "Europe"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
@@ -306,7 +414,7 @@
         "Platform Regulation",
         "Data Protection (GDPR, DPDP, LGPD)"
       ],
-      "notes": "Tech and democracy analysis.",
+      "notes": "Tech and democracy analysis. Best single source for AI governance commentary.",
       "enabled": true
     },
     {
@@ -316,12 +424,8 @@
       "rss_url": "https://ec.europa.eu/commission/presscorner/api/rss",
       "category": "Regulation",
       "source_type": "primary",
-      "region": [
-        "Europe"
-      ],
-      "region_tags": [
-        "Europe"
-      ],
+      "region": ["Europe"],
+      "region_tags": ["Europe"],
       "content_quality": "full",
       "scrape_tier": "daily",
       "scrape_interval_min": 1440,
@@ -332,7 +436,7 @@
         "Antitrust & Competition",
         "Data Protection (GDPR, DPDP, LGPD)"
       ],
-      "notes": "Official EU regulatory source - ground EU policy claims here.",
+      "notes": "Official EU regulatory source. Ground truth for AI Act, GDPR, and DMA enforcement.",
       "enabled": true
     },
     {
@@ -342,21 +446,14 @@
       "rss_url": "https://www.govtech.com/rss",
       "category": "Regulation",
       "source_type": "secondary",
-      "region": [
-        "North America"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["North America"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
       "default_business_tags": [],
-      "default_regulation_tags": [
-        "Digital Infrastructure Policy",
-        "Cybersecurity Policy"
-      ],
+      "default_regulation_tags": ["Digital Infrastructure Policy", "Cybersecurity Policy"],
       "notes": "US public-sector technology and policy.",
       "enabled": true
     },
@@ -367,24 +464,77 @@
       "rss_url": "https://rss.politico.com/technology.xml",
       "category": "Regulation",
       "source_type": "secondary",
-      "region": [
-        "North America"
-      ],
-      "region_tags": [
-        "North America",
-        "Europe"
-      ],
+      "region": ["North America"],
+      "region_tags": ["North America", "Europe"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
       "default_business_tags": [],
-      "default_regulation_tags": [
-        "AI Regulation",
-        "Antitrust & Competition",
-        "Platform Regulation"
+      "default_regulation_tags": ["AI Regulation", "Antitrust & Competition", "Platform Regulation"],
+      "notes": "US tech policy and politics. Strong on Congressional AI bills and FTC actions.",
+      "enabled": true
+    },
+    {
+      "id": "microsoft_blog",
+      "name": "Microsoft Official Blog",
+      "homepage": "https://blogs.microsoft.com",
+      "rss_url": "https://blogs.microsoft.com/feed/",
+      "category": "Company Blog",
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [
+        "Artificial Intelligence & ML",
+        "Cloud & Infrastructure",
+        "Software Development"
       ],
-      "notes": "US tech policy and politics.",
+      "default_business_tags": ["Big Tech (FAANG+Microsoft)"],
+      "default_regulation_tags": [],
+      "notes": "Primary source for Microsoft corporate announcements, partnerships, and product strategy.",
+      "enabled": true
+    },
+    {
+      "id": "microsoft_azure_blog",
+      "name": "Microsoft Azure Blog",
+      "homepage": "https://azure.microsoft.com/en-us/blog/",
+      "rss_url": "https://azure.microsoft.com/en-us/blog/feed/",
+      "category": "Company Blog",
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Cloud & Infrastructure", "Artificial Intelligence & ML"],
+      "default_business_tags": ["Big Tech (FAANG+Microsoft)"],
+      "default_regulation_tags": [],
+      "notes": "Official Azure product updates. Essential for cloud infra, AI services, and OpenAI on Azure.",
+      "enabled": true
+    },
+    {
+      "id": "microsoft_research",
+      "name": "Microsoft Research Blog",
+      "homepage": "https://www.microsoft.com/en-us/research/blog/",
+      "rss_url": "https://www.microsoft.com/en-us/research/feed/",
+      "category": "Research",
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "daily",
+      "scrape_interval_min": 1440,
+      "default_topic_tags": [
+        "Artificial Intelligence & ML",
+        "Quantum Computing",
+        "Software Development"
+      ],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Microsoft's own research output. Primary source for Phi models, Copilot research, and AI safety work.",
       "enabled": true
     },
     {
@@ -394,22 +544,37 @@
       "rss_url": "https://blog.google/rss/",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
+      "default_topic_tags": ["Artificial Intelligence & ML", "Cloud & Infrastructure"],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Official Google product and AI announcements.",
+      "enabled": true
+    },
+    {
+      "id": "deepmind_blog",
+      "name": "Google DeepMind Blog",
+      "homepage": "https://deepmind.google/discover/blog/",
+      "rss_url": "https://deepmind.google/blog/rss.xml",
+      "category": "Research",
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
+      "content_quality": "full",
+      "scrape_tier": "daily",
+      "scrape_interval_min": 1440,
       "default_topic_tags": [
         "Artificial Intelligence & ML",
-        "Cloud & Infrastructure"
+        "Health & Biotech",
+        "Robotics & Automation"
       ],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Official Google product/AI announcements.",
+      "notes": "Primary AI research from the world's leading AI lab. Gemini, AlphaFold, robotics.",
       "enabled": true
     },
     {
@@ -419,21 +584,15 @@
       "rss_url": "https://aws.amazon.com/about-aws/whats-new/recent/feed/",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Cloud & Infrastructure"
-      ],
+      "default_topic_tags": ["Cloud & Infrastructure"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "AWS service launches - competitor intel.",
+      "notes": "AWS service launches and announcements. Key competitor cloud intelligence.",
       "enabled": true
     },
     {
@@ -443,21 +602,15 @@
       "rss_url": "https://openai.com/news/rss.xml",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "OpenAI announcements - key competitor.",
+      "notes": "OpenAI model releases, safety research, and product announcements.",
       "enabled": true
     },
     {
@@ -467,21 +620,15 @@
       "rss_url": "https://www.anthropic.com/news/rss.xml",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Anthropic announcements - key partner/competitor.",
+      "notes": "Anthropic model releases and AI safety research.",
       "enabled": true
     },
     {
@@ -491,22 +638,15 @@
       "rss_url": "https://blogs.nvidia.com/feed/",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Hardware & Chips",
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Hardware & Chips", "Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "GPU/AI hardware - supply chain relevance.",
+      "notes": "GPU/AI hardware announcements. Critical for understanding AI infrastructure supply chain.",
       "enabled": true
     },
     {
@@ -516,21 +656,51 @@
       "rss_url": "https://github.blog/feed/",
       "category": "Company Blog",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development"
-      ],
+      "default_topic_tags": ["Software Development"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Developer tools - Microsoft-owned.",
+      "notes": "GitHub Copilot, Actions, and developer tool announcements. Microsoft-owned.",
+      "enabled": true
+    },
+    {
+      "id": "vscode_blog",
+      "name": "Visual Studio Code Blog",
+      "homepage": "https://code.visualstudio.com/blogs",
+      "rss_url": "https://code.visualstudio.com/feed.xml",
+      "category": "Company Blog",
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "daily",
+      "scrape_interval_min": 1440,
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML"],
+      "default_business_tags": ["Big Tech (FAANG+Microsoft)"],
+      "default_regulation_tags": [],
+      "notes": "VS Code release notes and Copilot/AI coding extension announcements.",
+      "enabled": true
+    },
+    {
+      "id": "huggingface_blog",
+      "name": "Hugging Face Blog",
+      "homepage": "https://huggingface.co/blog",
+      "rss_url": "https://huggingface.co/blog/feed.xml",
+      "category": "Research",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America", "Europe"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Artificial Intelligence & ML", "Software Development"],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Central hub of the open-source ML community. Model releases, fine-tuning guides, benchmark analyses.",
       "enabled": true
     },
     {
@@ -540,21 +710,15 @@
       "rss_url": "http://export.arxiv.org/rss/cs.AI",
       "category": "Research",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "daily",
       "scrape_interval_min": 1440,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "AI research preprints - filter by keywords, high volume.",
+      "notes": "AI research preprints. High volume — deduplicator and curator filter for relevance.",
       "enabled": true
     },
     {
@@ -564,46 +728,33 @@
       "rss_url": "http://export.arxiv.org/rss/cs.LG",
       "category": "Research",
       "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "daily",
       "scrape_interval_min": 1440,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "ML research preprints - filter by keywords, high volume.",
+      "notes": "ML research preprints. High volume — deduplicator and curator filter for relevance.",
       "enabled": true
     },
     {
-      "id": "hacker_news",
-      "name": "Hacker News",
-      "homepage": "https://news.ycombinator.com",
-      "rss_url": "https://hnrss.org/frontpage",
+      "id": "mit_news_ai",
+      "name": "MIT News — AI",
+      "homepage": "https://news.mit.edu/topic/artificial-intelligence2",
+      "rss_url": "https://news.mit.edu/rss/topic/artificial-intelligence2",
       "category": "Research",
-      "source_type": "aggregator",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
-      "content_quality": "excerpts",
-      "scrape_tier": "breaking",
-      "scrape_interval_min": 60,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML"
-      ],
+      "source_type": "primary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "daily",
+      "scrape_interval_min": 1440,
+      "default_topic_tags": ["Artificial Intelligence & ML", "Robotics & Automation", "Quantum Computing"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Community signal - links out, needs full fetch.",
+      "notes": "MIT's official AI research news. High credibility, peer-reviewed research context.",
       "enabled": true
     },
     {
@@ -613,21 +764,15 @@
       "rss_url": "https://www.statnews.com/feed/",
       "category": "Health",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Health & Biotech"
-      ],
+      "default_topic_tags": ["Health & Biotech"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Health/biotech intersection with AI.",
+      "notes": "Authoritative health/biotech journalism. Best for AI in medicine and drug discovery stories.",
       "enabled": true
     },
     {
@@ -637,22 +782,15 @@
       "rss_url": "https://www.itnews.com.au/RSS/rss.ashx",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Asia Pacific"
-      ],
-      "region_tags": [
-        "Asia Pacific"
-      ],
+      "region": ["Asia Pacific"],
+      "region_tags": ["Asia Pacific"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Cloud & Infrastructure",
-        "Cybersecurity"
-      ],
+      "default_topic_tags": ["Cloud & Infrastructure", "Cybersecurity"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Australian enterprise IT.",
+      "notes": "Australian enterprise IT. Good coverage of APAC cloud and government IT.",
       "enabled": true
     },
     {
@@ -662,22 +800,15 @@
       "rss_url": "https://www3.nhk.or.jp/nhkworld/en/news/rss/all.xml",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Asia Pacific"
-      ],
-      "region_tags": [
-        "Asia Pacific"
-      ],
+      "region": ["Asia Pacific"],
+      "region_tags": ["Asia Pacific"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML",
-        "Robotics & Automation"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML", "Robotics & Automation"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Japan/Asia English news.",
+      "notes": "Japan's public broadcaster. Best English source for Japan tech, robotics, and APAC policy.",
       "enabled": true
     },
     {
@@ -687,47 +818,15 @@
       "rss_url": "https://pandaily.com/feed/",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Greater China"
-      ],
-      "region_tags": [
-        "Greater China"
-      ],
+      "region": ["Greater China"],
+      "region_tags": ["Greater China"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": ["Startups & Venture"],
       "default_regulation_tags": [],
-      "notes": "China tech in English.",
-      "enabled": true
-    },
-    {
-      "id": "xinhua_tech",
-      "name": "Xinhua Tech",
-      "homepage": "http://www.xinhuanet.com/english/",
-      "rss_url": "http://www.xinhuanet.com/english/rss/scitechrss.xml",
-      "category": "Regional",
-      "source_type": "secondary",
-      "region": [
-        "Greater China"
-      ],
-      "region_tags": [
-        "Greater China"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [],
-      "default_regulation_tags": [],
-      "notes": "China state news - sci/tech. Note: state-affiliated, weight accordingly.",
+      "notes": "China tech in English. Covers Alibaba, Baidu, ByteDance, and Chinese AI models.",
       "enabled": true
     },
     {
@@ -737,24 +836,15 @@
       "rss_url": "https://inc42.com/feed/",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "India"
-      ],
-      "region_tags": [
-        "India"
-      ],
+      "region": ["India"],
+      "region_tags": ["India"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Startups & Venture",
-        "M&A & Funding"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": ["Startups & Venture", "M&A & Funding"],
       "default_regulation_tags": [],
-      "notes": "India startup ecosystem.",
+      "notes": "India startup ecosystem. Best English source for Indian AI companies and funding.",
       "enabled": true
     },
     {
@@ -764,19 +854,13 @@
       "rss_url": "https://yourstory.com/feed",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "India"
-      ],
-      "region_tags": [
-        "India"
-      ],
+      "region": ["India"],
+      "region_tags": ["India"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
+      "default_business_tags": ["Startups & Venture"],
       "default_regulation_tags": [],
       "notes": "India startups and entrepreneurship.",
       "enabled": true
@@ -788,43 +872,15 @@
       "rss_url": "https://techlatam.com/feed/",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Latin America"
-      ],
-      "region_tags": [
-        "Latin America"
-      ],
+      "region": ["Latin America"],
+      "region_tags": ["Latin America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Latin America tech news.",
-      "enabled": true
-    },
-    {
-      "id": "agencia_brasil",
-      "name": "Agencia Brasil",
-      "homepage": "https://agenciabrasil.ebc.com.br",
-      "rss_url": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
-      "category": "Regional",
-      "source_type": "primary",
-      "region": [
-        "Latin America"
-      ],
-      "region_tags": [
-        "Latin America"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [],
-      "default_business_tags": [],
-      "default_regulation_tags": [],
-      "notes": "Brazil public news agency - LGPD/policy. Portuguese - translate.",
+      "notes": "Latin America tech news in English.",
       "enabled": true
     },
     {
@@ -834,20 +890,13 @@
       "rss_url": "https://disrupt-africa.com/feed/",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Middle East & Africa"
-      ],
-      "region_tags": [
-        "Middle East & Africa"
-      ],
+      "region": ["Middle East & Africa"],
+      "region_tags": ["Middle East & Africa"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
-      "default_business_tags": [
-        "Startups & Venture",
-        "M&A & Funding"
-      ],
+      "default_business_tags": ["Startups & Venture", "M&A & Funding"],
       "default_regulation_tags": [],
       "notes": "African startup ecosystem.",
       "enabled": true
@@ -859,21 +908,15 @@
       "rss_url": "https://www.wamda.com/feed",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Middle East & Africa"
-      ],
-      "region_tags": [
-        "Middle East & Africa"
-      ],
+      "region": ["Middle East & Africa"],
+      "region_tags": ["Middle East & Africa"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
+      "default_business_tags": ["Startups & Venture"],
       "default_regulation_tags": [],
-      "notes": "MENA startup/venture news.",
+      "notes": "MENA startup and venture news.",
       "enabled": true
     },
     {
@@ -883,22 +926,15 @@
       "rss_url": "https://www.euractiv.com/sections/digital/feed/",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Europe"
-      ],
-      "region_tags": [
-        "Europe"
-      ],
+      "region": ["Europe"],
+      "region_tags": ["Europe"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
       "default_topic_tags": [],
       "default_business_tags": [],
-      "default_regulation_tags": [
-        "AI Regulation",
-        "Digital Infrastructure Policy"
-      ],
-      "notes": "EU policy news.",
+      "default_regulation_tags": ["AI Regulation", "Digital Infrastructure Policy"],
+      "notes": "Best English source for EU digital policy. Covers AI Act, DMA, and DSA implementation.",
       "enabled": true
     },
     {
@@ -908,24 +944,15 @@
       "rss_url": "https://www.theregister.com/headlines.atom",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Europe"
-      ],
-      "region_tags": [
-        "Europe",
-        "North America"
-      ],
+      "region": ["Europe"],
+      "region_tags": ["Europe", "North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Cloud & Infrastructure",
-        "Cybersecurity",
-        "Software Development"
-      ],
+      "default_topic_tags": ["Cloud & Infrastructure", "Cybersecurity", "Software Development"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "UK enterprise IT, irreverent.",
+      "notes": "UK enterprise IT. Irreverent but highly accurate on cloud, security, and Microsoft.",
       "enabled": true
     },
     {
@@ -935,49 +962,15 @@
       "rss_url": "https://www.siliconrepublic.com/feed",
       "category": "Regional",
       "source_type": "secondary",
-      "region": [
-        "Europe"
-      ],
-      "region_tags": [
-        "Europe"
-      ],
+      "region": ["Europe"],
+      "region_tags": ["Europe"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": ["Startups & Venture"],
       "default_regulation_tags": [],
-      "notes": "Irish/EU tech news.",
-      "enabled": true
-    },
-    {
-      "id": "gdelt",
-      "name": "GDELT",
-      "homepage": "https://www.gdeltproject.org",
-      "rss_url": "GDELT_API",
-      "category": "Aggregator",
-      "source_type": "aggregator",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "Latin America",
-        "Middle East & Africa",
-        "Asia Pacific",
-        "Greater China",
-        "India"
-      ],
-      "content_quality": "excerpts",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [],
-      "default_business_tags": [],
-      "default_regulation_tags": [],
-      "notes": "NOT an RSS feed - GDELT DOC 2.0 API. Needs custom client, not feedparser. Covers regions with sparse English sources.",
+      "notes": "Irish/EU tech news. Good for Dublin tech hub and EU regulation coverage.",
       "enabled": true
     },
     {
@@ -987,157 +980,52 @@
       "rss_url": "https://simonwillison.net/atom/everything/",
       "category": "Dev Tooling",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Artificial Intelligence & ML",
-        "Software Development"
-      ],
+      "default_topic_tags": ["Artificial Intelligence & ML", "Software Development"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Best individual coverage of LLM tools, Claude Code, and AI coding assistants. High signal-to-noise.",
-      "enabled": true
+      "notes": "Personal blog. Disabled: not a news outlet, content is blog posts and personal projects.",
+      "enabled": false
     },
     {
-      "id": "pragmatic_engineer",
-      "name": "The Pragmatic Engineer",
-      "homepage": "https://newsletter.pragmaticengineer.com",
-      "rss_url": "https://newsletter.pragmaticengineer.com/feed",
-      "category": "Engineering",
-      "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America",
-        "Europe"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Big Tech (FAANG+Microsoft)",
-        "Layoffs & Hiring"
-      ],
-      "default_regulation_tags": [],
-      "notes": "Top engineering newsletter. Covers AI coding tools, big tech eng culture, and developer ecosystem in depth.",
-      "enabled": true
-    },
-    {
-      "id": "stackoverflow_blog",
-      "name": "Stack Overflow Blog",
-      "homepage": "https://stackoverflow.blog",
-      "rss_url": "https://stackoverflow.blog/feed/",
-      "category": "Dev Tooling",
-      "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML"
-      ],
+      "id": "hacker_news",
+      "name": "Hacker News",
+      "homepage": "https://news.ycombinator.com",
+      "rss_url": "https://hnrss.org/frontpage",
+      "category": "Aggregator",
+      "source_type": "aggregator",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "excerpts",
+      "scrape_tier": "breaking",
+      "scrape_interval_min": 60,
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Developer surveys, AI coding tools adoption data, and engineering best practices.",
-      "enabled": true
-    },
-    {
-      "id": "vscode_blog",
-      "name": "Visual Studio Code Blog",
-      "homepage": "https://code.visualstudio.com/blogs",
-      "rss_url": "https://code.visualstudio.com/feed.xml",
-      "category": "Dev Tooling",
-      "source_type": "primary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "daily",
-      "scrape_interval_min": 1440,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Big Tech (FAANG+Microsoft)"
-      ],
-      "default_regulation_tags": [],
-      "notes": "Official VS Code release notes and feature announcements. Primary source for Copilot and Claude Code extension updates.",
-      "enabled": true
-    },
-    {
-      "id": "changelog",
-      "name": "Changelog News",
-      "homepage": "https://changelog.com/news",
-      "rss_url": "https://changelog.com/news/feed",
-      "category": "Dev Tooling",
-      "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
-      "content_quality": "full",
-      "scrape_tier": "standard",
-      "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML"
-      ],
-      "default_business_tags": [
-        "Startups & Venture"
-      ],
-      "default_regulation_tags": [],
-      "notes": "Open source and developer tooling news. Good signal on new AI coding tools, CLIs, and infrastructure projects.",
-      "enabled": true
+      "notes": "Disabled: noisy community aggregator, titles only, links to content already covered by primary sources.",
+      "enabled": false
     },
     {
       "id": "lobsters",
       "name": "Lobsters",
       "homepage": "https://lobste.rs",
       "rss_url": "https://lobste.rs/rss",
-      "category": "Dev Tooling",
+      "category": "Aggregator",
       "source_type": "aggregator",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "excerpts",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development",
-        "Artificial Intelligence & ML",
-        "Cybersecurity"
-      ],
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML", "Cybersecurity"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "Developer-curated link aggregator. High-quality signal on dev tooling, AI coding, and systems programming.",
-      "enabled": true
+      "notes": "Disabled: very niche developer link aggregator, low volume, titles only.",
+      "enabled": false
     },
     {
       "id": "bytes_dev",
@@ -1146,22 +1034,88 @@
       "rss_url": "https://bytes.dev/rss.xml",
       "category": "Dev Tooling",
       "source_type": "secondary",
-      "region": [
-        "Global"
-      ],
-      "region_tags": [
-        "North America"
-      ],
+      "region": ["Global"],
+      "region_tags": ["North America"],
       "content_quality": "full",
       "scrape_tier": "standard",
       "scrape_interval_min": 360,
-      "default_topic_tags": [
-        "Software Development"
-      ],
+      "default_topic_tags": ["Software Development"],
       "default_business_tags": [],
       "default_regulation_tags": [],
-      "notes": "JavaScript and frontend ecosystem newsletter. Covers JS/TS tooling, framework releases, and AI coding integrations.",
-      "enabled": true
+      "notes": "Disabled: JavaScript-only newsletter, too narrow for a general AI/enterprise audience.",
+      "enabled": false
+    },
+    {
+      "id": "changelog",
+      "name": "Changelog News",
+      "homepage": "https://changelog.com/news",
+      "rss_url": "https://changelog.com/news/feed",
+      "category": "Dev Tooling",
+      "source_type": "secondary",
+      "region": ["Global"],
+      "region_tags": ["North America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Software Development", "Artificial Intelligence & ML"],
+      "default_business_tags": ["Startups & Venture"],
+      "default_regulation_tags": [],
+      "notes": "Disabled: open-source podcast newsletter, too niche for the target audience.",
+      "enabled": false
+    },
+    {
+      "id": "xinhua_tech",
+      "name": "Xinhua Tech",
+      "homepage": "http://www.xinhuanet.com/english/",
+      "rss_url": "http://www.xinhuanet.com/english/rss/scitechrss.xml",
+      "category": "Regional",
+      "source_type": "secondary",
+      "region": ["Greater China"],
+      "region_tags": ["Greater China"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": ["Artificial Intelligence & ML"],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Disabled: Chinese state media — credibility concerns for a neutral AI news platform. Pandaily covers China tech without state bias.",
+      "enabled": false
+    },
+    {
+      "id": "gdelt",
+      "name": "GDELT",
+      "homepage": "https://www.gdeltproject.org",
+      "rss_url": "GDELT_API",
+      "category": "Aggregator",
+      "source_type": "aggregator",
+      "region": ["Global"],
+      "region_tags": ["Latin America", "Middle East & Africa", "Asia Pacific", "Greater China", "India"],
+      "content_quality": "excerpts",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Disabled: not an RSS feed (requires a custom GDELT DOC 2.0 API client). Regional gaps now covered by dedicated sources.",
+      "enabled": false
+    },
+    {
+      "id": "agencia_brasil",
+      "name": "Agencia Brasil",
+      "homepage": "https://agenciabrasil.ebc.com.br",
+      "rss_url": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
+      "category": "Regional",
+      "source_type": "primary",
+      "region": ["Latin America"],
+      "region_tags": ["Latin America"],
+      "content_quality": "full",
+      "scrape_tier": "standard",
+      "scrape_interval_min": 360,
+      "default_topic_tags": [],
+      "default_business_tags": [],
+      "default_regulation_tags": [],
+      "notes": "Disabled: publishes in Portuguese. TechLatam covers Latin America in English.",
+      "enabled": false
     }
   ]
 }
