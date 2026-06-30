@@ -11,7 +11,8 @@ frontend's generated client doesn't surface them.
 
 import secrets
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, BackgroundTasks, Header
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.errors import problem
@@ -32,17 +33,20 @@ def _require_worker_secret(authorization: str | None) -> None:
 
 
 @router.post("/run-digest-worker")
-def run_digest_worker(authorization: str | None = Header(default=None)) -> dict:
+def run_digest_worker(
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+) -> JSONResponse:
     """
     Trigger one run of the digest worker.
 
-    Called daily by .github/workflows/digest-cron.yml. Safe to invoke
-    manually too — the worker is idempotent (won't double-generate for
-    users who already have a digest for today).
+    Called daily by .github/workflows/digest-cron.yml. Returns 202 immediately
+    and runs the worker in the background — avoids Azure Container Apps' 240s
+    HTTP timeout on long-running jobs.
     """
     _require_worker_secret(authorization)
-    result = digest_worker.run()
-    return {"status": "ok", **result}
+    background_tasks.add_task(digest_worker.run)
+    return JSONResponse(status_code=202, content={"status": "accepted"})
 
 
 @router.post("/backfill-embeddings")
@@ -112,14 +116,18 @@ def backfill_embeddings(authorization: str | None = Header(default=None)) -> dic
 
 
 @router.post("/run-ingest")
-def run_ingest(authorization: str | None = Header(default=None)) -> dict:
+def run_ingest(
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+) -> JSONResponse:
     """
     Fetch all RSS sources across every scrape tier, deduplicate, embed,
     and index into pgvector. Does NOT generate digests.
 
-    Safe to call manually or from a GitHub Actions cron schedule.
+    Returns 202 immediately and runs the ingest in the background — avoids
+    Azure Container Apps' 240s HTTP timeout on long-running jobs.
     Idempotent — re-indexing an already-embedded article is a cheap upsert.
     """
     _require_worker_secret(authorization)
-    result = ingest_worker.run()
-    return {"status": "ok", **result}
+    background_tasks.add_task(ingest_worker.run)
+    return JSONResponse(status_code=202, content={"status": "accepted"})
